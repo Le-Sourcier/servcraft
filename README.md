@@ -82,6 +82,7 @@ servcraft add upload            # File uploads
 servcraft add rate-limit        # Advanced rate limiting
 servcraft add webhook           # Outgoing webhooks
 servcraft add queue             # Background jobs & queues
+servcraft add websocket         # Real-time with Socket.io
 servcraft add --list            # Show all modules
 ```
 
@@ -468,6 +469,116 @@ CronSchedules.MONTHLY            // 0 0 1 * *
 CronSchedules.WEEKDAYS_9AM       // 0 9 * * 1-5
 ```
 
+### Websockets/Real-time
+
+Real-time communication with Socket.io for chat, presence, notifications, and live events:
+
+**Features:**
+- Real-time chat with typing indicators
+- User presence tracking (online/offline/away)
+- Live notifications
+- Room/namespace management
+- Event broadcasting
+- Authentication & role-based access
+- Rate limiting & throttling
+
+**Usage:**
+
+```typescript
+import {
+  WebSocketService,
+  ChatFeature,
+  PresenceFeature,
+  NotificationFeature,
+  authMiddleware
+} from './modules/websocket';
+
+// Create service
+const wsService = new WebSocketService({
+  cors: { origin: 'http://localhost:3000' },
+  redis: { host: 'localhost', port: 6379 }
+});
+
+// Initialize with HTTP server
+wsService.initialize(httpServer);
+
+// Create features
+const chat = new ChatFeature(wsService);
+const presence = new PresenceFeature(wsService);
+const notifications = new NotificationFeature(wsService);
+
+// Send chat message
+await chat.sendMessage('room-123', 'user-456', 'Hello everyone!', {
+  mentions: ['user-789']
+});
+
+// Typing indicator
+await chat.startTyping('room-123', 'user-456', 'John');
+
+// Send notification
+await notifications.send(
+  'user-123',
+  'message',
+  'New Message',
+  'You have a new message from John'
+);
+
+// Broadcast live event
+await wsService.broadcastToAll('analytics:update', {
+  metric: 'active_users',
+  value: 1250
+});
+```
+
+**Client-side:**
+
+```typescript
+import { io } from 'socket.io-client';
+
+const socket = io('http://localhost:3000', {
+  auth: { token: 'your-jwt-token' },
+  query: { username: 'john' }
+});
+
+// Listen for events
+socket.on('chat:message', (msg) => console.log('New message:', msg));
+socket.on('presence:status', (status) => console.log('Status:', status));
+socket.on('notification:new', (notif) => console.log('Notification:', notif));
+socket.on('live:event', (event) => console.log('Live event:', event));
+
+// Send message
+socket.emit('chat:send', { roomId: 'room-123', content: 'Hello!' });
+
+// Start typing
+socket.emit('chat:typing', { roomId: 'room-123' });
+```
+
+**Middlewares:**
+
+```typescript
+import {
+  authMiddleware,
+  rateLimitMiddleware,
+  roleMiddleware,
+  throttleMiddleware
+} from './modules/websocket';
+
+// Apply middlewares
+io.use(authMiddleware());
+io.use(rateLimitMiddleware(5, 60000)); // 5 connections per minute
+io.use(roleMiddleware(['user', 'admin']));
+io.use(throttleMiddleware(100, 1000)); // 100 events per second
+```
+
+**Features:**
+
+- **Chat**: Messages, typing indicators, mentions, edit/delete
+- **Presence**: Online/away/busy status, last seen
+- **Notifications**: Real-time push, read/unread tracking
+- **Live Events**: Analytics, system updates, custom events
+- **Rooms**: Create, join, leave, member management
+- **Broadcasting**: To all, to room, to specific users
+
 ## Modules & Resources
 
 ServCraft includes these pre-built modules:
@@ -483,6 +594,7 @@ ServCraft includes these pre-built modules:
 - ✅ **Rate Limiting** - Fixed/sliding window, token bucket algorithms
 - ✅ **Webhooks (Outgoing)** - HMAC signatures, auto-retry, delivery tracking
 - ✅ **Queue/Jobs** - Background tasks, cron scheduling, 10+ workers
+- ✅ **Websockets/Real-time** - Chat, presence, notifications, live events
 - ✅ **File Upload** - Multi-provider support (local, S3, etc.)
 - ✅ **MFA/TOTP** - Two-factor authentication with QR codes
 - ✅ **OAuth** - Google, GitHub, Facebook, Twitter, Apple
@@ -490,7 +602,6 @@ ServCraft includes these pre-built modules:
 - ✅ **Notifications** - Email, SMS, Push notifications
 
 ### Coming Soon
-- ⏳ **Websockets/Real-time** - Socket.io integration
 - ⏳ **Search** - Elasticsearch/Meilisearch integration
 - ⏳ **i18n/Localization** - Multi-language support
 - ⏳ **Feature Flags** - A/B testing, progressive rollout
