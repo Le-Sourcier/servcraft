@@ -243,6 +243,103 @@ const store = new RedisStore(redis);
 const service = new RateLimitService({ max: 100, windowMs: 60000 }, store);
 ```
 
+### Webhooks Sortants
+
+Send events to external URLs with automatic retry, HMAC signatures, and monitoring:
+
+**Features:**
+- Automatic retry with exponential backoff
+- HMAC-SHA256 signature verification
+- Delivery tracking and monitoring
+- Multiple retry strategies
+- Event filtering by type
+- Webhook endpoint management
+
+**Usage:**
+
+```typescript
+import { WebhookService, createWebhookRoutes } from './modules/webhook';
+
+// Create service
+const webhookService = new WebhookService({
+  maxRetries: 5,
+  timeout: 10000,
+  enableSignature: true
+});
+
+// Create endpoint
+const endpoint = await webhookService.createEndpoint({
+  url: 'https://example.com/webhook',
+  events: ['user.created', 'order.completed'],
+  description: 'Production webhook'
+});
+
+// Publish event
+await webhookService.publishEvent('user.created', {
+  userId: '123',
+  email: 'user@example.com',
+  name: 'John Doe'
+});
+
+// Add routes
+app.use('/api/webhooks', authMiddleware, createWebhookRoutes(webhookService));
+```
+
+**Signature Verification (Recipient Side):**
+
+```typescript
+import { verifyWebhookSignature } from './modules/webhook';
+
+app.post('/webhook', (req, res) => {
+  const signature = req.headers['x-webhook-signature'];
+  const secret = 'your-webhook-secret';
+
+  if (!verifyWebhookSignature(req.body, signature, secret)) {
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
+
+  // Process webhook
+  res.json({ received: true });
+});
+```
+
+**Admin Routes:**
+
+```
+POST   /webhooks/endpoints              Create endpoint
+GET    /webhooks/endpoints              List endpoints
+GET    /webhooks/endpoints/:id          Get endpoint
+PATCH  /webhooks/endpoints/:id          Update endpoint
+DELETE /webhooks/endpoints/:id          Delete endpoint
+POST   /webhooks/endpoints/:id/rotate-secret  Rotate secret
+POST   /webhooks/events                 Publish event
+GET    /webhooks/deliveries             List deliveries
+GET    /webhooks/deliveries/:id         Get delivery
+GET    /webhooks/deliveries/:id/attempts  Get attempts
+POST   /webhooks/deliveries/:id/retry   Retry delivery
+GET    /webhooks/stats                  Get statistics
+POST   /webhooks/cleanup                Cleanup old data
+```
+
+**Retry Strategies:**
+
+```typescript
+import {
+  ExponentialBackoffStrategy,
+  LinearBackoffStrategy,
+  FixedDelayStrategy
+} from './modules/webhook';
+
+// Exponential: 1s, 2s, 4s, 8s, 16s
+const exponential = new ExponentialBackoffStrategy(1000, 60000, 2, 5);
+
+// Linear: 5s, 10s, 15s
+const linear = new LinearBackoffStrategy(5000, 3);
+
+// Fixed: 10s, 10s, 10s
+const fixed = new FixedDelayStrategy(10000, 3);
+```
+
 ## API Endpoints
 
 ### Authentication
