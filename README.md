@@ -15,6 +15,163 @@ A modular, production-ready Node.js backend framework built with TypeScript, Fas
 - **Docker**: Ready for containerization
 - **CLI**: Generate modules, controllers, services
 
+## How to Use the Services
+
+The modules (Rate Limiting, Webhooks, Queue, Websockets, etc.) are **reusable services** that you integrate into your own routes and controllers. They are NOT standalone user-facing endpoints.
+
+### Quick Integration Example
+
+```typescript
+// YOUR controller (e.g., src/modules/post/post.controller.ts)
+import { webhookService } from '../webhook';
+import { queueService, emailWorker } from '../queue';
+import { wsService } from '../websocket';
+import { strictRateLimit } from '../rate-limit';
+
+class PostController {
+  async createPost(req, res) {
+    // 1. Create the post
+    const post = await db.post.create(req.body);
+
+    // 2. Use webhook service - notify external systems
+    await webhookService.publishEvent('post.created', {
+      postId: post.id,
+      title: post.title,
+      author: req.user.id
+    });
+
+    // 3. Use queue service - send emails asynchronously
+    await queueService.addJob('emails', 'send-email', {
+      to: 'admin@example.com',
+      subject: 'New Post Created',
+      html: `<p>${post.title} was published</p>`
+    });
+
+    // 4. Use websocket service - real-time notification
+    await wsService.broadcastToAll('post:new', post);
+
+    // 5. Use cache service - invalidate cache
+    await cacheService.delete('posts:latest');
+
+    res.json(post);
+  }
+}
+
+// Apply rate limiting to YOUR routes
+app.post('/api/posts', strictRateLimit, postController.createPost);
+app.get('/api/posts', standardRateLimit, postController.list);
+```
+
+### Available Services
+
+All services are available as importable modules in your code:
+
+| Service | Import | Usage |
+|---------|--------|-------|
+| **Rate Limiting** | `import { strictRateLimit, createRateLimiter } from './modules/rate-limit'` | Apply as middleware on routes |
+| **Webhooks** | `import { WebhookService } from './modules/webhook'` | Publish events to external URLs |
+| **Queue/Jobs** | `import { QueueService, emailWorker } from './modules/queue'` | Background tasks & cron jobs |
+| **Websockets** | `import { WebSocketService, ChatFeature } from './modules/websocket'` | Real-time communication |
+| **Cache** | `import { CacheService } from './modules/cache'` | Redis caching |
+| **MFA** | `import { MFAService } from './modules/mfa'` | Two-factor authentication |
+| **OAuth** | `import { OAuthService } from './modules/oauth'` | Social login |
+| **Payments** | `import { PaymentService } from './modules/payment'` | Process payments |
+| **Upload** | `import { UploadService } from './modules/upload'` | File uploads |
+| **Notifications** | `import { NotificationService } from './modules/notification'` | Send notifications |
+
+### Common Integration Patterns
+
+**Pattern 1: E-commerce Order Flow**
+```typescript
+async createOrder(req, res) {
+  const order = await db.order.create(req.body);
+
+  // Send webhook to inventory system
+  await webhookService.publishEvent('order.created', order);
+
+  // Queue payment processing
+  await queueService.addJob('payments', 'process-payment', {
+    orderId: order.id,
+    amount: order.total
+  });
+
+  // Real-time update to user
+  await wsService.broadcastToUsers([order.userId], 'order:created', order);
+
+  // Queue confirmation email (delayed 5 minutes)
+  await queueService.addJob('emails', 'send-email', {
+    to: order.email,
+    template: 'order-confirmation',
+    data: order
+  }, { delay: 5 * 60 * 1000 });
+
+  res.json(order);
+}
+```
+
+**Pattern 2: User Registration**
+```typescript
+async register(req, res) {
+  const user = await db.user.create(req.body);
+
+  // Generate MFA secret
+  const mfaSetup = await mfaService.setupTOTP(user.id, 'MyApp');
+
+  // Queue welcome email
+  await queueService.addJob('emails', 'send-email', {
+    to: user.email,
+    subject: 'Welcome!',
+    template: 'welcome',
+    data: { user, mfaQR: mfaSetup.qrCode }
+  });
+
+  // Webhook to CRM
+  await webhookService.publishEvent('user.registered', user);
+
+  res.json({ user, mfaSetup });
+}
+```
+
+**Pattern 3: Content Moderation**
+```typescript
+async uploadImage(req, res) {
+  // Upload file
+  const file = await uploadService.upload(req.file, {
+    allowedTypes: ['image/jpeg', 'image/png'],
+    maxSize: 5 * 1024 * 1024
+  });
+
+  // Queue image processing
+  await queueService.addJob('images', 'process-image', {
+    source: file.path,
+    operations: [
+      { type: 'resize', options: { width: 800 } },
+      { type: 'watermark', options: { text: '© MyApp' } },
+      { type: 'compress', options: { quality: 80 } }
+    ],
+    output: `/processed/${file.id}.jpg`
+  });
+
+  res.json(file);
+}
+```
+
+### Auto-Generated Documentation
+
+Yes! Use the built-in docs generator:
+
+```bash
+# Generate API documentation automatically
+servcraft docs generate
+
+# This will scan all your routes and generate:
+# - OpenAPI/Swagger spec
+# - Endpoint list
+# - Request/response examples
+```
+
+The `src/cli/commands/docs.ts` file I created does this automatically!
+
 ## Quick Start
 
 ### Create a new project
