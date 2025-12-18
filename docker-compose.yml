@@ -1,0 +1,147 @@
+# ==========================================
+# Servcraft - Docker Compose Configuration
+# ==========================================
+
+version: '3.8'
+
+services:
+  # ===================
+  # Application
+  # ===================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: servcraft-app
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_URL=postgresql://servcraft:servcraft@postgres:5432/servcraft?schema=public
+      - DATABASE_PROVIDER=postgresql
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=dev-secret-key-change-in-production-min-32-chars
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - servcraft-network
+
+  # ===================
+  # PostgreSQL Database
+  # ===================
+  postgres:
+    image: postgres:16-alpine
+    container_name: servcraft-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: servcraft
+      POSTGRES_PASSWORD: servcraft
+      POSTGRES_DB: servcraft
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U servcraft"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - servcraft-network
+
+  # ===================
+  # MySQL Database (Alternative)
+  # ===================
+  mysql:
+    image: mysql:8.0
+    container_name: servcraft-mysql
+    restart: unless-stopped
+    profiles:
+      - mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: servcraft
+      MYSQL_PASSWORD: servcraft
+      MYSQL_DATABASE: servcraft
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - servcraft-network
+
+  # ===================
+  # Redis Cache
+  # ===================
+  redis:
+    image: redis:7-alpine
+    container_name: servcraft-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - servcraft-network
+
+  # ===================
+  # Adminer (Database GUI)
+  # ===================
+  adminer:
+    image: adminer:latest
+    container_name: servcraft-adminer
+    restart: unless-stopped
+    profiles:
+      - tools
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+    networks:
+      - servcraft-network
+
+  # ===================
+  # Mailhog (Email Testing)
+  # ===================
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: servcraft-mailhog
+    restart: unless-stopped
+    profiles:
+      - tools
+    ports:
+      - "${MAILHOG_SMTP:-1025}:1025"
+      - "${MAILHOG_UI:-8025}:8025"
+    networks:
+      - servcraft-network
+
+# ===================
+# Volumes
+# ===================
+volumes:
+  postgres-data:
+  mysql-data:
+  redis-data:
+
+# ===================
+# Networks
+# ===================
+networks:
+  servcraft-network:
+    driver: bridge
