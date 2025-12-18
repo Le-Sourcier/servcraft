@@ -10,7 +10,7 @@ A modular, production-ready Node.js backend framework built with TypeScript, Fas
 - **Validation**: Zod/Joi/Yup support
 - **Database**: Prisma ORM (PostgreSQL, MySQL, SQLite)
 - **Email**: SMTP with Handlebars templates
-- **Security**: Helmet, CORS, Rate limiting
+- **Security**: Helmet, CORS, Advanced rate limiting (fixed/sliding window, token bucket)
 - **Logging**: Pino structured logs + Audit trail
 - **Docker**: Ready for containerization
 - **CLI**: Generate modules, controllers, services
@@ -79,6 +79,7 @@ servcraft add email             # Email service
 servcraft add audit             # Audit logging
 servcraft add cache             # Redis cache
 servcraft add upload            # File uploads
+servcraft add rate-limit        # Advanced rate limiting
 servcraft add --list            # Show all modules
 ```
 
@@ -162,6 +163,84 @@ SMTP_PASS=pass
 
 # Logging
 LOG_LEVEL=info
+```
+
+## Modules
+
+### Rate Limiting
+
+Advanced rate limiting with multiple algorithms and strategies:
+
+**Features:**
+- Multiple algorithms: Fixed Window, Sliding Window, Token Bucket
+- Storage options: In-memory or Redis (for distributed systems)
+- Flexible key generation: IP, User ID, API Key, or custom
+- Whitelist/Blacklist support
+- Custom limits per endpoint or user role
+- Standard rate limit headers (X-RateLimit-*)
+- Admin API for management
+
+**Usage:**
+
+```typescript
+import {
+  createRateLimiter,
+  strictRateLimit,
+  authRateLimit,
+  userRateLimit
+} from './modules/rate-limit';
+
+// Global rate limiter
+app.use(createRateLimiter({
+  max: 100,                    // 100 requests
+  windowMs: 60 * 1000,         // per minute
+  algorithm: 'sliding-window'  // or 'fixed-window', 'token-bucket'
+}));
+
+// Pre-configured limiters
+app.post('/login', authRateLimit, loginHandler);        // 5 req/15min
+app.post('/sensitive', strictRateLimit, sensitiveHandler); // 5 req/min
+
+// Custom limiters
+app.get('/api/data',
+  userRateLimit(1000, 60 * 60 * 1000),  // 1000 req/hour per user
+  dataHandler
+);
+
+// Per-endpoint limits
+app.use(createRateLimiter({
+  max: 100,
+  windowMs: 60 * 1000,
+  customLimits: {
+    'POST:/api/expensive': { max: 10, windowMs: 60 * 1000 },
+    'role:admin': { max: 10000, windowMs: 60 * 1000 }
+  }
+}));
+```
+
+**Admin Routes:**
+
+```
+GET    /rate-limit/info/:key      Get rate limit info
+POST   /rate-limit/reset/:key     Reset rate limit
+GET    /rate-limit/config         Get configuration
+POST   /rate-limit/whitelist      Add IP to whitelist
+DELETE /rate-limit/whitelist/:ip  Remove from whitelist
+POST   /rate-limit/blacklist      Add IP to blacklist
+DELETE /rate-limit/blacklist/:ip  Remove from blacklist
+POST   /rate-limit/clear          Clear all data
+POST   /rate-limit/cleanup        Cleanup expired entries
+```
+
+**Redis Storage (for multi-instance):**
+
+```typescript
+import { RateLimitService, RedisStore } from './modules/rate-limit';
+import Redis from 'ioredis';
+
+const redis = new Redis();
+const store = new RedisStore(redis);
+const service = new RateLimitService({ max: 100, windowMs: 60000 }, store);
 ```
 
 ## API Endpoints

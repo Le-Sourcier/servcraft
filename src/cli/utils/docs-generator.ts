@@ -1,0 +1,47 @@
+import fs from 'fs/promises';
+import path from 'path';
+import ora from 'ora';
+import { createServer } from '../../core/server.js';
+import { registerErrorHandler, registerSecurity } from '../../middleware/index.js';
+import { registerSwagger } from '../../modules/swagger/index.js';
+import { registerAuthModule } from '../../modules/auth/index.js';
+import { registerUserModule } from '../../modules/user/index.js';
+import { config } from '../../config/index.js';
+
+export async function generateDocs(outputPath = 'openapi.json', silent = false): Promise<string> {
+  const spinner = silent ? null : ora('Generating OpenAPI documentation...').start();
+  try {
+    const server = createServer({
+      port: config.server.port,
+      host: config.server.host,
+    });
+    const app = server.instance;
+
+    registerErrorHandler(app);
+    await registerSecurity(app);
+    await registerSwagger(app, {
+      enabled: true,
+      route: config.swagger.route,
+      title: config.swagger.title,
+      description: config.swagger.description,
+      version: config.swagger.version,
+    });
+    const authService = await registerAuthModule(app);
+    await registerUserModule(app, authService);
+
+    await app.ready();
+    const spec = app.swagger();
+
+    const absoluteOutput = path.resolve(outputPath);
+    await fs.mkdir(path.dirname(absoluteOutput), { recursive: true });
+    await fs.writeFile(absoluteOutput, JSON.stringify(spec, null, 2), 'utf8');
+
+    spinner?.succeed(`OpenAPI spec generated at ${absoluteOutput}`);
+
+    await app.close();
+    return absoluteOutput;
+  } catch (error) {
+    spinner?.fail('Failed to generate OpenAPI documentation');
+    throw error;
+  }
+}
