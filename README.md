@@ -80,6 +80,8 @@ servcraft add audit             # Audit logging
 servcraft add cache             # Redis cache
 servcraft add upload            # File uploads
 servcraft add rate-limit        # Advanced rate limiting
+servcraft add webhook           # Outgoing webhooks
+servcraft add queue             # Background jobs & queues
 servcraft add --list            # Show all modules
 ```
 
@@ -339,6 +341,162 @@ const linear = new LinearBackoffStrategy(5000, 3);
 // Fixed: 10s, 10s, 10s
 const fixed = new FixedDelayStrategy(10000, 3);
 ```
+
+### Queue/Jobs (Background Tasks)
+
+Background job processing with Bull/BullMQ, cron scheduling, and pre-built workers:
+
+**Features:**
+- Background job processing
+- Priority queues
+- Automatic retry with backoff
+- Cron-based scheduling
+- Job progress tracking
+- Real-time monitoring & metrics
+- 10+ pre-built workers
+
+**Usage:**
+
+```typescript
+import {
+  QueueService,
+  CronJobManager,
+  emailWorker,
+  imageProcessingWorker,
+  CronSchedules
+} from './modules/queue';
+
+// Create queue service
+const queueService = new QueueService({
+  redis: { host: 'localhost', port: 6379 },
+  metrics: true
+});
+
+// Register workers
+queueService.registerWorker('emails', emailWorker);
+queueService.registerWorker('images', imageProcessingWorker);
+
+// Add job
+await queueService.addJob('emails', 'send-email', {
+  to: 'user@example.com',
+  subject: 'Welcome!',
+  html: '<h1>Welcome to our service</h1>'
+}, {
+  priority: 'high',
+  attempts: 3,
+  backoff: { type: 'exponential', delay: 1000 }
+});
+
+// Bulk jobs
+await queueService.addBulkJobs('notifications', {
+  jobs: [
+    { name: 'send-notification', data: { userId: '1', message: 'Hello' } },
+    { name: 'send-notification', data: { userId: '2', message: 'Hi' } }
+  ]
+});
+```
+
+**Cron Jobs:**
+
+```typescript
+const cronManager = new CronJobManager(queueService);
+
+// Daily backup at midnight
+await cronManager.createCronJob(
+  'Daily Backup',
+  CronSchedules.DAILY,
+  'maintenance',
+  'database-backup',
+  { databases: ['main', 'analytics'] }
+);
+
+// Custom cron expression: Every 15 minutes
+await cronManager.createCronJob(
+  'Cache Warming',
+  '*/15 * * * *',
+  'cache',
+  'warm-cache',
+  { keys: ['popular-posts', 'trending-users'] }
+);
+```
+
+**Pre-built Workers:**
+
+- `emailWorker` - Send emails (nodemailer, SendGrid, etc.)
+- `imageProcessingWorker` - Resize, crop, watermark images
+- `notificationWorker` - Push/SMS/email notifications
+- `webhookWorker` - HTTP webhooks
+- `dataExportWorker` - Export to CSV/Excel/PDF
+- `reportGenerationWorker` - Generate reports
+- `databaseBackupWorker` - Database backups
+- `cacheWarmingWorker` - Cache warming
+- `dataCleanupWorker` - Clean old data
+- `batchProcessingWorker` - Batch processing
+
+**Admin Routes:**
+
+```
+GET    /queue/queues                    List all queues
+GET    /queue/queues/:name/stats        Get queue stats
+GET    /queue/queues/:name/metrics      Get queue metrics
+POST   /queue/queues/:name/pause        Pause queue
+POST   /queue/queues/:name/resume       Resume queue
+POST   /queue/queues/:name/jobs         Add job
+POST   /queue/queues/:name/jobs/bulk    Add bulk jobs
+GET    /queue/queues/:name/jobs         List jobs
+GET    /queue/queues/:name/jobs/:id     Get job
+DELETE /queue/queues/:name/jobs/:id     Remove job
+POST   /queue/queues/:name/jobs/:id/retry  Retry job
+POST   /queue/queues/:name/clean        Clean old jobs
+POST   /queue/cron                      Create cron job
+GET    /queue/cron                      List cron jobs
+GET    /queue/cron/:id                  Get cron job
+PATCH  /queue/cron/:id                  Update cron job
+DELETE /queue/cron/:id                  Delete cron job
+POST   /queue/cron/:id/trigger          Trigger cron job
+```
+
+**Cron Schedules:**
+
+```typescript
+CronSchedules.EVERY_MINUTE       // * * * * *
+CronSchedules.EVERY_15_MINUTES   // */15 * * * *
+CronSchedules.EVERY_HOUR         // 0 * * * *
+CronSchedules.DAILY              // 0 0 * * *
+CronSchedules.WEEKLY             // 0 0 * * 0
+CronSchedules.MONTHLY            // 0 0 1 * *
+CronSchedules.WEEKDAYS_9AM       // 0 9 * * 1-5
+```
+
+## Modules & Resources
+
+ServCraft includes these pre-built modules:
+
+### Core Modules
+- ✅ **Authentication** - JWT access/refresh tokens, RBAC
+- ✅ **User Management** - Full CRUD with roles & permissions
+- ✅ **Email Service** - SMTP with Handlebars templates
+- ✅ **Audit Logging** - Activity tracking & audit trail
+
+### Advanced Features
+- ✅ **Cache Module** - Redis caching with TTL & invalidation
+- ✅ **Rate Limiting** - Fixed/sliding window, token bucket algorithms
+- ✅ **Webhooks (Outgoing)** - HMAC signatures, auto-retry, delivery tracking
+- ✅ **Queue/Jobs** - Background tasks, cron scheduling, 10+ workers
+- ✅ **File Upload** - Multi-provider support (local, S3, etc.)
+- ✅ **MFA/TOTP** - Two-factor authentication with QR codes
+- ✅ **OAuth** - Google, GitHub, Facebook, Twitter, Apple
+- ✅ **Payments** - Stripe, PayPal, Mobile Money integration
+- ✅ **Notifications** - Email, SMS, Push notifications
+
+### Coming Soon
+- ⏳ **Websockets/Real-time** - Socket.io integration
+- ⏳ **Search** - Elasticsearch/Meilisearch integration
+- ⏳ **i18n/Localization** - Multi-language support
+- ⏳ **Feature Flags** - A/B testing, progressive rollout
+- ⏳ **Analytics/Metrics** - Prometheus, custom metrics
+- ⏳ **Media Processing** - Image/video processing with FFmpeg
+- ⏳ **API Versioning** - Multiple API versions support
 
 ## API Endpoints
 
