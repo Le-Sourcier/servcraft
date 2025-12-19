@@ -1,5 +1,7 @@
-import { randomUUID } from 'crypto';
+import type { Job as BullJob } from 'bullmq';
+import { Queue, Worker as BullWorker, QueueEvents } from 'bullmq';
 import { EventEmitter } from 'events';
+import { Redis } from 'ioredis';
 import { logger } from '../../core/logger.js';
 import { NotFoundError, BadRequestError } from '../../utils/errors.js';
 import type {
@@ -15,17 +17,12 @@ import type {
   JobEvent,
 } from './types.js';
 
-// In-memory storage (replace with Bull/BullMQ in production)
-const queues = new Map<string, Map<string, Job>>();
-const workers = new Map<string, Map<string, Worker>>();
-const activeJobs = new Map<string, Set<string>>();
-const metrics = new Map<string, QueueMetrics>();
-
 const defaultConfig: Required<QueueConfig> = {
   redis: {
-    host: 'localhost',
-    port: 6379,
-    db: 0,
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    password: process.env.REDIS_PASSWORD,
+    db: parseInt(process.env.REDIS_DB || '0', 10),
   },
   defaultJobOptions: {
     attempts: 3,
@@ -37,78 +34,263 @@ const defaultConfig: Required<QueueConfig> = {
     removeOnFail: false,
     timeout: 60000,
   },
-  prefix: 'queue',
+  prefix: 'servcraft:queue',
   metrics: true,
 };
 
 /**
  * Queue Service
- * Manages background jobs and task queues
+ * Manages background jobs and task queues using BullMQ with Redis persistence
  *
- * Note: This is a simplified in-memory implementation.
- * For production, use Bull or BullMQ with Redis.
+ * Features:
+ * - Persistent job storage in Redis
+ * - Automatic retries with exponential backoff
+ * - Job prioritization (critical, high, normal, low)
+ * - Delayed/scheduled jobs
+ * - Repeatable/cron jobs
+ * - Concurrency control per worker
+ * - Real-time events and metrics
+ * - Multi-instance safe (horizontal scaling)
  */
 export class QueueService extends EventEmitter {
   private config: Required<QueueConfig>;
-  private processing = new Map<string, boolean>();
+  private connection: Redis;
+  private queues = new Map<string, Queue>();
+  private workers = new Map<string, BullWorker>();
+  private queueEvents = new Map<string, QueueEvents>();
+  private workerProcessors = new Map<string, Map<string, Worker>>();
+  private metrics = new Map<string, QueueMetrics>();
+  private isClosing = false;
 
   constructor(config?: QueueConfig) {
     super();
-    this.config = { ...defaultConfig, ...config };
+    this.config = {
+      ...defaultConfig,
+      ...config,
+      redis: { ...defaultConfig.redis, ...config?.redis },
+      defaultJobOptions: { ...defaultConfig.defaultJobOptions, ...config?.defaultJobOptions },
+    };
+
+    // Create Redis connection
+    this.connection = new Redis({
+      host: this.config.redis.host,
+      port: this.config.redis.port,
+      password: this.config.redis.password,
+      db: this.config.redis.db,
+      maxRetriesPerRequest: null, // Required for BullMQ
+      enableReadyCheck: false,
+    });
+
+    this.connection.on('error', (err: Error) => {
+      logger.error({ err }, 'Queue Redis connection error');
+    });
+
+    this.connection.on('connect', () => {
+      logger.info('Queue Redis connected');
+    });
   }
 
   /**
    * Create a new queue
    */
-  createQueue(name: string): void {
-    if (!queues.has(name)) {
-      queues.set(name, new Map());
-      workers.set(name, new Map());
-      activeJobs.set(name, new Set());
-
-      if (this.config.metrics) {
-        metrics.set(name, {
-          totalProcessed: 0,
-          totalFailed: 0,
-          avgProcessingTime: 0,
-          throughput: 0,
-          peakConcurrency: 0,
-          currentConcurrency: 0,
-          successRate: 0,
-        });
-      }
-
-      logger.info({ queueName: name }, 'Queue created');
+  createQueue(name: string): Queue {
+    if (this.queues.has(name)) {
+      return this.queues.get(name)!;
     }
+
+    const queue = new Queue(name, {
+      connection: this.connection.duplicate(),
+      prefix: this.config.prefix,
+      defaultJobOptions: this.mapJobOptionsToBullMQ(this.config.defaultJobOptions),
+    });
+
+    this.queues.set(name, queue);
+    this.workerProcessors.set(name, new Map());
+
+    // Initialize metrics
+    if (this.config.metrics) {
+      this.metrics.set(name, {
+        totalProcessed: 0,
+        totalFailed: 0,
+        avgProcessingTime: 0,
+        throughput: 0,
+        peakConcurrency: 0,
+        currentConcurrency: 0,
+        successRate: 100,
+      });
+    }
+
+    // Setup queue events
+    this.setupQueueEvents(name);
+
+    logger.info({ queueName: name }, 'Queue created with BullMQ');
+
+    return queue;
+  }
+
+  /**
+   * Setup queue events listener
+   */
+  private setupQueueEvents(name: string): void {
+    const queueEvents = new QueueEvents(name, {
+      connection: this.connection.duplicate(),
+      prefix: this.config.prefix,
+    });
+
+    this.queueEvents.set(name, queueEvents);
+
+    queueEvents.on('completed', ({ jobId, returnvalue }) => {
+      this.emitEvent({
+        event: 'completed',
+        jobId,
+        data: returnvalue,
+        timestamp: new Date(),
+      });
+    });
+
+    queueEvents.on('failed', ({ jobId, failedReason }) => {
+      this.emitEvent({
+        event: 'failed',
+        jobId,
+        data: failedReason,
+        timestamp: new Date(),
+      });
+    });
+
+    queueEvents.on('progress', ({ jobId, data }) => {
+      this.emitEvent({
+        event: 'progress',
+        jobId,
+        data,
+        timestamp: new Date(),
+      });
+    });
+
+    queueEvents.on('stalled', ({ jobId }) => {
+      this.emitEvent({
+        event: 'stalled',
+        jobId,
+        timestamp: new Date(),
+      });
+    });
+
+    queueEvents.on('active', ({ jobId }) => {
+      this.emitEvent({
+        event: 'active',
+        jobId,
+        timestamp: new Date(),
+      });
+    });
+  }
+
+  /**
+   * Map our JobOptions to BullMQ options
+   */
+  private mapJobOptionsToBullMQ(options: JobOptions): Record<string, unknown> {
+    const bullOptions: Record<string, unknown> = {};
+
+    if (options.priority) {
+      // BullMQ uses numeric priority (lower = higher priority)
+      const priorityMap = { critical: 1, high: 2, normal: 3, low: 4 };
+      bullOptions.priority = priorityMap[options.priority];
+    }
+
+    if (options.delay !== undefined) {
+      bullOptions.delay = options.delay;
+    }
+
+    if (options.attempts !== undefined) {
+      bullOptions.attempts = options.attempts;
+    }
+
+    if (options.backoff) {
+      bullOptions.backoff = {
+        type: options.backoff.type,
+        delay: options.backoff.delay,
+      };
+    }
+
+    if (options.removeOnComplete !== undefined) {
+      bullOptions.removeOnComplete = options.removeOnComplete;
+    }
+
+    if (options.removeOnFail !== undefined) {
+      bullOptions.removeOnFail = options.removeOnFail;
+    }
+
+    if (options.repeat) {
+      bullOptions.repeat = {
+        pattern: options.repeat.cron,
+        every: options.repeat.every,
+        limit: options.repeat.limit,
+        immediately: options.repeat.immediately,
+      };
+    }
+
+    return bullOptions;
+  }
+
+  /**
+   * Map BullMQ job to our Job interface
+   */
+  private mapBullJobToJob<T>(bullJob: BullJob<T>, queueName: string): Job<T> {
+    const state = bullJob.returnvalue !== undefined ? 'completed' : 'waiting';
+
+    return {
+      id: bullJob.id || '',
+      queueName,
+      name: bullJob.name,
+      data: bullJob.data,
+      options: {
+        priority: this.mapPriorityFromBullMQ(bullJob.opts.priority),
+        delay: bullJob.opts.delay,
+        attempts: bullJob.opts.attempts,
+        backoff: bullJob.opts.backoff as JobOptions['backoff'],
+        removeOnComplete: bullJob.opts.removeOnComplete as boolean | number | undefined,
+        removeOnFail: bullJob.opts.removeOnFail as boolean | number | undefined,
+      },
+      status: state as JobStatus,
+      progress: typeof bullJob.progress === 'number' ? bullJob.progress : undefined,
+      attemptsMade: bullJob.attemptsMade,
+      result: bullJob.returnvalue,
+      error: bullJob.failedReason,
+      stacktrace: bullJob.stacktrace,
+      createdAt: new Date(bullJob.timestamp),
+      processedAt: bullJob.processedOn ? new Date(bullJob.processedOn) : undefined,
+      completedAt: bullJob.finishedOn ? new Date(bullJob.finishedOn) : undefined,
+      failedAt: bullJob.failedReason ? new Date(bullJob.finishedOn || Date.now()) : undefined,
+      delayedUntil: bullJob.delay ? new Date(bullJob.timestamp + bullJob.delay) : undefined,
+    };
+  }
+
+  /**
+   * Map BullMQ numeric priority to our priority type
+   */
+  private mapPriorityFromBullMQ(priority?: number): JobOptions['priority'] {
+    if (!priority) return 'normal';
+    if (priority <= 1) return 'critical';
+    if (priority <= 2) return 'high';
+    if (priority <= 3) return 'normal';
+    return 'low';
   }
 
   /**
    * Add a job to a queue
    */
-  async addJob<T = any>(
+  async addJob<T = unknown>(
     queueName: string,
     jobName: string,
     data: T,
     options?: JobOptions
   ): Promise<Job<T>> {
-    this.createQueue(queueName);
+    const queue = this.createQueue(queueName);
 
     const mergedOptions = { ...this.config.defaultJobOptions, ...options };
-    const now = new Date();
+    const bullOptions = this.mapJobOptionsToBullMQ(mergedOptions);
 
-    const job: Job<T> = {
-      id: randomUUID(),
-      queueName,
-      name: jobName,
-      data,
-      options: mergedOptions,
-      status: mergedOptions.delay ? 'delayed' : 'waiting',
-      attemptsMade: 0,
-      createdAt: now,
-      delayedUntil: mergedOptions.delay ? new Date(now.getTime() + mergedOptions.delay) : undefined,
-    };
+    const bullJob = await queue.add(jobName, data, bullOptions);
 
-    queues.get(queueName)!.set(job.id, job);
+    const job = this.mapBullJobToJob<T>(bullJob, queueName);
 
     this.emitEvent({
       event: 'added',
@@ -119,23 +301,24 @@ export class QueueService extends EventEmitter {
 
     logger.debug({ jobId: job.id, queueName, jobName }, 'Job added to queue');
 
-    // Start processing if not delayed
-    if (!mergedOptions.delay) {
-      setImmediate(() => this.processQueue(queueName));
-    }
-
     return job;
   }
 
   /**
    * Add multiple jobs in bulk
    */
-  async addBulkJobs(queueName: string, options: BulkJobOptions): Promise<Job[]> {
-    const jobs = await Promise.all(
-      options.jobs.map((jobData) =>
-        this.addJob(queueName, jobData.name, jobData.data, jobData.opts)
-      )
-    );
+  async addBulkJobs(queueName: string, bulkOptions: BulkJobOptions): Promise<Job[]> {
+    const queue = this.createQueue(queueName);
+
+    const bullJobs = bulkOptions.jobs.map((jobData) => ({
+      name: jobData.name,
+      data: jobData.data,
+      opts: jobData.opts ? this.mapJobOptionsToBullMQ(jobData.opts) : undefined,
+    }));
+
+    const addedJobs = await queue.addBulk(bullJobs);
+
+    const jobs = addedJobs.map((bullJob) => this.mapBullJobToJob(bullJob, queueName));
 
     logger.info({ queueName, count: jobs.length }, 'Bulk jobs added');
 
@@ -145,244 +328,84 @@ export class QueueService extends EventEmitter {
   /**
    * Register a worker for a job type
    */
-  registerWorker<T = any>(queueName: string, worker: Worker<T>): void {
+  registerWorker<T = unknown>(queueName: string, worker: Worker<T>): void {
     this.createQueue(queueName);
 
-    workers.get(queueName)!.set(worker.name, worker);
+    // Store the worker processor
+    this.workerProcessors.get(queueName)!.set(worker.name, worker as Worker);
+
+    // Create or update BullMQ worker
+    this.ensureBullWorker(queueName);
 
     logger.info({ queueName, workerName: worker.name }, 'Worker registered');
-
-    // Start processing
-    setImmediate(() => this.processQueue(queueName));
   }
 
   /**
-   * Process queue
+   * Ensure BullMQ worker exists for queue
    */
-  private async processQueue(queueName: string): Promise<void> {
-    if (this.processing.get(queueName)) {
-      return; // Already processing
+  private ensureBullWorker(queueName: string): void {
+    // If worker already exists, close it and recreate
+    if (this.workers.has(queueName)) {
+      return; // Worker already running
     }
 
-    this.processing.set(queueName, true);
+    const processors = this.workerProcessors.get(queueName);
+    if (!processors || processors.size === 0) {
+      return;
+    }
 
-    try {
-      const queue = queues.get(queueName);
-      const queueWorkers = workers.get(queueName);
-      const active = activeJobs.get(queueName);
+    // Get max concurrency from all workers
+    const maxConcurrency = Math.max(
+      ...Array.from(processors.values()).map((w) => w.concurrency || 1)
+    );
 
-      if (!queue || !queueWorkers || !active) {
-        return;
-      }
-
-      // Get waiting jobs
-      const waitingJobs = Array.from(queue.values())
-        .filter((job) => job.status === 'waiting')
-        .sort((_a, _b) => {
-          // Sort by priority
-          const priorityOrder = { critical: 0, high: 1, normal: 2, low: 3 };
-          const aPriority = priorityOrder[_a.options.priority || 'normal'];
-          const bPriority = priorityOrder[_b.options.priority || 'normal'];
-          return aPriority - bPriority;
-        });
-
-      // Check delayed jobs
-      const now = Date.now();
-      for (const job of queue.values()) {
-        if (job.status === 'delayed' && job.delayedUntil && job.delayedUntil.getTime() <= now) {
-          job.status = 'waiting';
-          job.delayedUntil = undefined;
-        }
-      }
-
-      // Process jobs
-      for (const job of waitingJobs) {
-        const worker = queueWorkers.get(job.name);
-
+    const bullWorker = new BullWorker(
+      queueName,
+      async (bullJob: BullJob) => {
+        const worker = processors.get(bullJob.name);
         if (!worker) {
-          continue; // No worker for this job type
+          throw new Error(`No worker registered for job type: ${bullJob.name}`);
         }
 
-        // Check concurrency
-        const concurrency = worker.concurrency || 1;
-        const activeCount = Array.from(active).filter((jobId) => {
-          const activeJob = queue.get(jobId);
-          return activeJob?.name === worker.name;
-        }).length;
+        const job = this.mapBullJobToJob(bullJob, queueName);
+        const startTime = Date.now();
 
-        if (activeCount >= concurrency) {
-          continue; // Max concurrency reached for this worker
+        try {
+          const result = await worker.process(job);
+
+          // Update metrics on success
+          this.updateMetrics(queueName, true, Date.now() - startTime);
+
+          return result;
+        } catch (error) {
+          // Update metrics on failure
+          this.updateMetrics(queueName, false, Date.now() - startTime);
+          throw error;
         }
-
-        // Process job
-        this.processJob(queueName, job.id).catch((error) => {
-          logger.error({ error, jobId: job.id }, 'Error processing job');
-        });
+      },
+      {
+        connection: this.connection.duplicate(),
+        prefix: this.config.prefix,
+        concurrency: maxConcurrency,
       }
-    } finally {
-      this.processing.set(queueName, false);
+    );
 
-      // Schedule next check
-      const queue = queues.get(queueName);
-      if (queue) {
-        const hasWaiting = Array.from(queue.values()).some(
-          (job) => job.status === 'waiting' || job.status === 'delayed'
-        );
-
-        if (hasWaiting) {
-          setTimeout(() => this.processQueue(queueName), 1000);
-        }
-      }
-    }
-  }
-
-  /**
-   * Process a single job
-   */
-  private async processJob(queueName: string, jobId: string): Promise<void> {
-    const queue = queues.get(queueName);
-    const queueWorkers = workers.get(queueName);
-    const active = activeJobs.get(queueName);
-
-    if (!queue || !queueWorkers || !active) {
-      return;
-    }
-
-    const job = queue.get(jobId);
-    if (!job || job.status !== 'waiting') {
-      return;
-    }
-
-    const worker = queueWorkers.get(job.name);
-    if (!worker) {
-      return;
-    }
-
-    // Mark as active
-    job.status = 'active';
-    job.processedAt = new Date();
-    active.add(jobId);
-
-    this.emitEvent({
-      event: 'active',
-      jobId: job.id,
-      timestamp: new Date(),
+    bullWorker.on('completed', (job) => {
+      logger.info({ jobId: job.id, queueName, jobName: job.name }, 'Job completed');
     });
 
-    const startTime = Date.now();
+    bullWorker.on('failed', (job, err) => {
+      logger.error(
+        { jobId: job?.id, queueName, jobName: job?.name, error: err.message },
+        'Job failed'
+      );
+    });
 
-    try {
-      // Execute worker with timeout
-      const timeout = job.options.timeout || 60000;
-      const result = await Promise.race([
-        worker.process(job),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Job timeout')), timeout)),
-      ]);
+    bullWorker.on('error', (err) => {
+      logger.error({ queueName, error: err.message }, 'Worker error');
+    });
 
-      // Job completed
-      const duration = Date.now() - startTime;
-      job.status = 'completed';
-      job.result = result;
-      job.completedAt = new Date();
-      active.delete(jobId);
-
-      this.emitEvent({
-        event: 'completed',
-        jobId: job.id,
-        data: result,
-        timestamp: new Date(),
-      });
-
-      logger.info({ jobId: job.id, queueName, jobName: job.name, duration }, 'Job completed');
-
-      // Update metrics
-      this.updateMetrics(queueName, true, duration);
-
-      // Remove if configured
-      if (job.options.removeOnComplete) {
-        queue.delete(jobId);
-      }
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      job.attemptsMade++;
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-      // Check if should retry
-      const maxAttempts = job.options.attempts || 1;
-      if (job.attemptsMade < maxAttempts) {
-        // Calculate backoff delay
-        const backoff = job.options.backoff;
-        let delay = 1000;
-
-        if (backoff) {
-          if (backoff.type === 'exponential') {
-            delay = backoff.delay * Math.pow(2, job.attemptsMade - 1);
-          } else {
-            delay = backoff.delay;
-          }
-        }
-
-        // Schedule retry
-        job.status = 'delayed';
-        job.delayedUntil = new Date(Date.now() + delay);
-        job.error = errorMessage;
-        active.delete(jobId);
-
-        logger.warn(
-          {
-            jobId: job.id,
-            queueName,
-            attempt: job.attemptsMade,
-            maxAttempts,
-            delay,
-            error: errorMessage,
-          },
-          'Job failed, will retry'
-        );
-
-        setTimeout(() => {
-          job.status = 'waiting';
-          job.delayedUntil = undefined;
-          this.processQueue(queueName);
-        }, delay);
-      } else {
-        // Job failed permanently
-        job.status = 'failed';
-        job.error = errorMessage;
-        job.stacktrace = error instanceof Error ? error.stack?.split('\n') : undefined;
-        job.failedAt = new Date();
-        active.delete(jobId);
-
-        this.emitEvent({
-          event: 'failed',
-          jobId: job.id,
-          data: error,
-          timestamp: new Date(),
-        });
-
-        logger.error(
-          {
-            jobId: job.id,
-            queueName,
-            jobName: job.name,
-            attempts: job.attemptsMade,
-            error: errorMessage,
-          },
-          'Job failed permanently'
-        );
-
-        // Update metrics
-        this.updateMetrics(queueName, false, duration);
-
-        // Remove if configured
-        if (job.options.removeOnFail) {
-          queue.delete(jobId);
-        }
-      }
-    }
-
-    // Continue processing
-    setImmediate(() => this.processQueue(queueName));
+    this.workers.set(queueName, bullWorker);
   }
 
   /**
@@ -391,7 +414,7 @@ export class QueueService extends EventEmitter {
   private updateMetrics(queueName: string, success: boolean, duration: number): void {
     if (!this.config.metrics) return;
 
-    const metric = metrics.get(queueName);
+    const metric = this.metrics.get(queueName);
     if (!metric) return;
 
     if (success) {
@@ -405,29 +428,27 @@ export class QueueService extends EventEmitter {
     metric.avgProcessingTime = (metric.avgProcessingTime * (total - 1) + duration) / total;
 
     // Update success rate
-    metric.successRate = (metric.totalProcessed / total) * 100;
-
-    // Update concurrency
-    const active = activeJobs.get(queueName);
-    if (active) {
-      metric.currentConcurrency = active.size;
-      metric.peakConcurrency = Math.max(metric.peakConcurrency, active.size);
-    }
+    metric.successRate = total > 0 ? (metric.totalProcessed / total) * 100 : 100;
   }
 
   /**
    * Get job by ID
    */
   async getJob(queueName: string, jobId: string): Promise<Job> {
-    const queue = queues.get(queueName);
+    const queue = this.queues.get(queueName);
     if (!queue) {
       throw new NotFoundError('Queue not found');
     }
 
-    const job = queue.get(jobId);
-    if (!job) {
+    const bullJob = await queue.getJob(jobId);
+    if (!bullJob) {
       throw new NotFoundError('Job not found');
     }
+
+    // Get actual state from BullMQ
+    const state = await bullJob.getState();
+    const job = this.mapBullJobToJob(bullJob, queueName);
+    job.status = state as JobStatus;
 
     return job;
   }
@@ -436,60 +457,98 @@ export class QueueService extends EventEmitter {
    * List jobs with filters
    */
   async listJobs(queueName: string, filter?: JobFilter): Promise<Job[]> {
-    const queue = queues.get(queueName);
+    const queue = this.queues.get(queueName);
     if (!queue) {
       throw new NotFoundError('Queue not found');
     }
 
-    let jobs = Array.from(queue.values());
+    const statuses = filter?.status
+      ? Array.isArray(filter.status)
+        ? filter.status
+        : [filter.status]
+      : ['waiting', 'active', 'completed', 'failed', 'delayed'];
 
-    // Apply filters
-    if (filter?.status) {
-      const statuses = Array.isArray(filter.status) ? filter.status : [filter.status];
-      jobs = jobs.filter((job) => statuses.includes(job.status));
-    }
-
-    if (filter?.name) {
-      jobs = jobs.filter((job) => job.name === filter.name);
-    }
-
-    if (filter?.startDate) {
-      jobs = jobs.filter((job) => job.createdAt >= filter.startDate!);
-    }
-
-    if (filter?.endDate) {
-      jobs = jobs.filter((job) => job.createdAt <= filter.endDate!);
-    }
-
-    // Sort by creation date (newest first)
-    jobs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-    // Pagination
     const offset = filter?.offset || 0;
     const limit = filter?.limit || 100;
 
-    return jobs.slice(offset, offset + limit);
+    // Get jobs from each status
+    const allJobs: Job[] = [];
+
+    for (const status of statuses) {
+      let bullJobs: BullJob[] = [];
+
+      switch (status) {
+        case 'waiting':
+          bullJobs = await queue.getWaiting(offset, offset + limit);
+          break;
+        case 'active':
+          bullJobs = await queue.getActive(offset, offset + limit);
+          break;
+        case 'completed':
+          bullJobs = await queue.getCompleted(offset, offset + limit);
+          break;
+        case 'failed':
+          bullJobs = await queue.getFailed(offset, offset + limit);
+          break;
+        case 'delayed':
+          bullJobs = await queue.getDelayed(offset, offset + limit);
+          break;
+      }
+
+      for (const bullJob of bullJobs) {
+        const job = this.mapBullJobToJob(bullJob, queueName);
+        job.status = status as JobStatus;
+
+        // Apply name filter
+        if (filter?.name && job.name !== filter.name) {
+          continue;
+        }
+
+        // Apply date filters
+        if (filter?.startDate && job.createdAt < filter.startDate) {
+          continue;
+        }
+        if (filter?.endDate && job.createdAt > filter.endDate) {
+          continue;
+        }
+
+        allJobs.push(job);
+      }
+    }
+
+    // Sort by creation date (newest first)
+    allJobs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    // Apply pagination
+    return allJobs.slice(0, limit);
   }
 
   /**
    * Get queue statistics
    */
   async getStats(queueName: string): Promise<QueueStats> {
-    const queue = queues.get(queueName);
+    const queue = this.queues.get(queueName);
     if (!queue) {
       throw new NotFoundError('Queue not found');
     }
 
-    const jobs = Array.from(queue.values());
+    const counts = await queue.getJobCounts(
+      'waiting',
+      'active',
+      'completed',
+      'failed',
+      'delayed',
+      'paused'
+    );
 
     return {
       name: queueName,
-      waiting: jobs.filter((j) => j.status === 'waiting').length,
-      active: jobs.filter((j) => j.status === 'active').length,
-      completed: jobs.filter((j) => j.status === 'completed').length,
-      failed: jobs.filter((j) => j.status === 'failed').length,
-      delayed: jobs.filter((j) => j.status === 'delayed').length,
-      paused: jobs.filter((j) => j.status === 'paused').length,
+      waiting: counts.waiting || 0,
+      active: counts.active || 0,
+      completed: counts.completed || 0,
+      failed: counts.failed || 0,
+      delayed: counts.delayed || 0,
+      paused: counts.paused || 0,
     };
   }
 
@@ -497,9 +556,20 @@ export class QueueService extends EventEmitter {
    * Get queue metrics
    */
   async getMetrics(queueName: string): Promise<QueueMetrics> {
-    const metric = metrics.get(queueName);
+    const metric = this.metrics.get(queueName);
     if (!metric) {
       throw new NotFoundError('Queue not found or metrics disabled');
+    }
+
+    // Update current concurrency from worker
+    const worker = this.workers.get(queueName);
+    if (worker) {
+      const queue = this.queues.get(queueName);
+      if (queue) {
+        const activeCount = await queue.getActiveCount();
+        metric.currentConcurrency = activeCount;
+        metric.peakConcurrency = Math.max(metric.peakConcurrency, activeCount);
+      }
     }
 
     return { ...metric };
@@ -509,25 +579,26 @@ export class QueueService extends EventEmitter {
    * Remove a job
    */
   async removeJob(queueName: string, jobId: string): Promise<void> {
-    const queue = queues.get(queueName);
+    const queue = this.queues.get(queueName);
     if (!queue) {
       throw new NotFoundError('Queue not found');
     }
 
-    const job = queue.get(jobId);
-    if (!job) {
+    const bullJob = await queue.getJob(jobId);
+    if (!bullJob) {
       throw new NotFoundError('Job not found');
     }
 
-    if (job.status === 'active') {
+    const state = await bullJob.getState();
+    if (state === 'active') {
       throw new BadRequestError('Cannot remove active job');
     }
 
-    queue.delete(jobId);
+    await bullJob.remove();
 
     this.emitEvent({
       event: 'removed',
-      jobId: job.id,
+      jobId,
       timestamp: new Date(),
     });
 
@@ -538,21 +609,24 @@ export class QueueService extends EventEmitter {
    * Retry a failed job
    */
   async retryJob(queueName: string, jobId: string): Promise<void> {
-    const job = await this.getJob(queueName, jobId);
+    const queue = this.queues.get(queueName);
+    if (!queue) {
+      throw new NotFoundError('Queue not found');
+    }
 
-    if (job.status !== 'failed') {
+    const bullJob = await queue.getJob(jobId);
+    if (!bullJob) {
+      throw new NotFoundError('Job not found');
+    }
+
+    const state = await bullJob.getState();
+    if (state !== 'failed') {
       throw new BadRequestError('Can only retry failed jobs');
     }
 
-    job.status = 'waiting';
-    job.attemptsMade = 0;
-    job.error = undefined;
-    job.stacktrace = undefined;
-    job.failedAt = undefined;
+    await bullJob.retry();
 
     logger.info({ jobId, queueName }, 'Job retry initiated');
-
-    setImmediate(() => this.processQueue(queueName));
   }
 
   /**
@@ -563,22 +637,18 @@ export class QueueService extends EventEmitter {
     status: JobStatus | JobStatus[],
     olderThanMs: number = 24 * 60 * 60 * 1000
   ): Promise<number> {
-    const queue = queues.get(queueName);
+    const queue = this.queues.get(queueName);
     if (!queue) {
       throw new NotFoundError('Queue not found');
     }
 
     const statuses = Array.isArray(status) ? status : [status];
-    const cutoffDate = new Date(Date.now() - olderThanMs);
     let cleaned = 0;
 
-    for (const [jobId, job] of queue.entries()) {
-      if (statuses.includes(job.status)) {
-        const completedAt = job.completedAt || job.failedAt;
-        if (completedAt && completedAt < cutoffDate) {
-          queue.delete(jobId);
-          cleaned++;
-        }
+    for (const s of statuses) {
+      if (s === 'completed' || s === 'failed') {
+        const removed = await queue.clean(olderThanMs, 1000, s);
+        cleaned += removed.length;
       }
     }
 
@@ -599,23 +669,19 @@ export class QueueService extends EventEmitter {
    * List all queues
    */
   async listQueues(): Promise<string[]> {
-    return Array.from(queues.keys());
+    return Array.from(this.queues.keys());
   }
 
   /**
    * Pause a queue
    */
   async pauseQueue(queueName: string): Promise<void> {
-    const queue = queues.get(queueName);
+    const queue = this.queues.get(queueName);
     if (!queue) {
       throw new NotFoundError('Queue not found');
     }
 
-    for (const job of queue.values()) {
-      if (job.status === 'waiting') {
-        job.status = 'paused';
-      }
-    }
+    await queue.pause();
 
     logger.info({ queueName }, 'Queue paused');
   }
@@ -624,19 +690,153 @@ export class QueueService extends EventEmitter {
    * Resume a queue
    */
   async resumeQueue(queueName: string): Promise<void> {
-    const queue = queues.get(queueName);
+    const queue = this.queues.get(queueName);
     if (!queue) {
       throw new NotFoundError('Queue not found');
     }
 
-    for (const job of queue.values()) {
-      if (job.status === 'paused') {
-        job.status = 'waiting';
-      }
-    }
+    await queue.resume();
 
     logger.info({ queueName }, 'Queue resumed');
+  }
 
-    setImmediate(() => this.processQueue(queueName));
+  /**
+   * Drain a queue (remove all jobs)
+   */
+  async drainQueue(queueName: string): Promise<void> {
+    const queue = this.queues.get(queueName);
+    if (!queue) {
+      throw new NotFoundError('Queue not found');
+    }
+
+    await queue.drain();
+
+    logger.info({ queueName }, 'Queue drained');
+  }
+
+  /**
+   * Obliterate a queue (remove queue and all data)
+   */
+  async obliterateQueue(queueName: string): Promise<void> {
+    const queue = this.queues.get(queueName);
+    if (!queue) {
+      throw new NotFoundError('Queue not found');
+    }
+
+    // Close worker first
+    const worker = this.workers.get(queueName);
+    if (worker) {
+      await worker.close();
+      this.workers.delete(queueName);
+    }
+
+    // Close queue events
+    const queueEvents = this.queueEvents.get(queueName);
+    if (queueEvents) {
+      await queueEvents.close();
+      this.queueEvents.delete(queueName);
+    }
+
+    // Obliterate queue
+    await queue.obliterate();
+    this.queues.delete(queueName);
+    this.workerProcessors.delete(queueName);
+    this.metrics.delete(queueName);
+
+    logger.info({ queueName }, 'Queue obliterated');
+  }
+
+  /**
+   * Get job progress
+   */
+  async getJobProgress(
+    queueName: string,
+    jobId: string
+  ): Promise<number | object | string | boolean> {
+    const queue = this.queues.get(queueName);
+    if (!queue) {
+      throw new NotFoundError('Queue not found');
+    }
+
+    const bullJob = await queue.getJob(jobId);
+    if (!bullJob) {
+      throw new NotFoundError('Job not found');
+    }
+
+    return bullJob.progress;
+  }
+
+  /**
+   * Update job progress
+   */
+  async updateJobProgress(
+    queueName: string,
+    jobId: string,
+    progress: number | object
+  ): Promise<void> {
+    const queue = this.queues.get(queueName);
+    if (!queue) {
+      throw new NotFoundError('Queue not found');
+    }
+
+    const bullJob = await queue.getJob(jobId);
+    if (!bullJob) {
+      throw new NotFoundError('Job not found');
+    }
+
+    await bullJob.updateProgress(progress);
+  }
+
+  /**
+   * Graceful shutdown
+   */
+  async close(): Promise<void> {
+    if (this.isClosing) {
+      return;
+    }
+
+    this.isClosing = true;
+    logger.info('Closing queue service...');
+
+    // Close all workers (wait for active jobs)
+    const workerPromises = Array.from(this.workers.values()).map((worker) => worker.close());
+    await Promise.all(workerPromises);
+
+    // Close all queue events
+    const eventPromises = Array.from(this.queueEvents.values()).map((events) => events.close());
+    await Promise.all(eventPromises);
+
+    // Close all queues
+    const queuePromises = Array.from(this.queues.values()).map((queue) => queue.close());
+    await Promise.all(queuePromises);
+
+    // Close Redis connection
+    await this.connection.quit();
+
+    this.workers.clear();
+    this.queueEvents.clear();
+    this.queues.clear();
+    this.workerProcessors.clear();
+    this.metrics.clear();
+
+    logger.info('Queue service closed');
+  }
+
+  /**
+   * Check if service is connected
+   */
+  isConnected(): boolean {
+    return this.connection.status === 'ready';
+  }
+
+  /**
+   * Get Redis connection info
+   */
+  getConnectionInfo(): { host: string; port: number; status: string } {
+    return {
+      host: this.config.redis.host || 'localhost',
+      port: this.config.redis.port || 6379,
+      status: this.connection.status,
+    };
   }
 }
