@@ -1,21 +1,46 @@
 import { Command } from 'commander';
 import path from 'path';
-import fs from 'fs/promises';
 import ora from 'ora';
 import chalk from 'chalk';
-import { ensureDir, writeFile, fileExists, success, error, info, warn, getModulesDir, getSourceDir } from '../utils/helpers.js';
+import {
+  ensureDir,
+  writeFile,
+  fileExists,
+  success,
+  error,
+  info,
+  warn,
+  getModulesDir,
+} from '../utils/helpers.js';
+import { EnvManager } from '../utils/env-manager.js';
 
 // Pre-built modules that can be added
 const AVAILABLE_MODULES = {
   auth: {
     name: 'Authentication',
     description: 'JWT authentication with access/refresh tokens',
-    files: ['auth.service', 'auth.controller', 'auth.routes', 'auth.middleware', 'auth.schemas', 'auth.types', 'index'],
+    files: [
+      'auth.service',
+      'auth.controller',
+      'auth.routes',
+      'auth.middleware',
+      'auth.schemas',
+      'auth.types',
+      'index',
+    ],
   },
   users: {
     name: 'User Management',
     description: 'User CRUD with RBAC (roles & permissions)',
-    files: ['user.service', 'user.controller', 'user.repository', 'user.routes', 'user.schemas', 'user.types', 'index'],
+    files: [
+      'user.service',
+      'user.controller',
+      'user.repository',
+      'user.routes',
+      'user.schemas',
+      'user.types',
+      'index',
+    ],
   },
   email: {
     name: 'Email Service',
@@ -45,13 +70,22 @@ const AVAILABLE_MODULES = {
   settings: {
     name: 'Settings',
     description: 'Application settings management',
-    files: ['settings.service', 'settings.controller', 'settings.routes', 'settings.types', 'index'],
+    files: [
+      'settings.service',
+      'settings.controller',
+      'settings.routes',
+      'settings.types',
+      'index',
+    ],
   },
 };
 
 export const addModuleCommand = new Command('add')
   .description('Add a pre-built module to your project')
-  .argument('[module]', 'Module to add (auth, users, email, audit, upload, cache, notifications, settings)')
+  .argument(
+    '[module]',
+    'Module to add (auth, users, email, audit, upload, cache, notifications, settings)'
+  )
   .option('-l, --list', 'List available modules')
   .action(async (moduleName?: string, options?: { list?: boolean }) => {
     if (options?.list || !moduleName) {
@@ -120,11 +154,51 @@ export const addModuleCommand = new Command('add')
       console.log('\n📁 Files created:');
       module.files.forEach((f) => success(`  src/modules/${moduleName}/${f}.ts`));
 
-      console.log('\n📌 Next steps:');
-      info('  1. Register the module in your main app file');
-      info('  2. Configure any required environment variables');
-      info('  3. Run database migrations if needed');
+      // Update .env file with module-specific variables
+      const envManager = new EnvManager(process.cwd());
+      const envSections = EnvManager.getModuleEnvVariables(moduleName);
 
+      if (envSections.length > 0) {
+        const envSpinner = ora('Updating environment variables...').start();
+        try {
+          const result = await envManager.addVariables(envSections);
+
+          envSpinner.succeed('Environment variables updated!');
+
+          if (result.created) {
+            info('\n📝 Created new .env file');
+          }
+
+          if (result.added.length > 0) {
+            console.log(chalk.bold('\n✅ Added to .env:'));
+            result.added.forEach((key) => success(`  ${key}`));
+          }
+
+          if (result.skipped.length > 0) {
+            console.log(chalk.bold('\n⏭️  Already in .env (skipped):'));
+            result.skipped.forEach((key) => info(`  ${key}`));
+          }
+
+          // Show which variables need configuration
+          const requiredVars = envSections
+            .flatMap((section) => section.variables)
+            .filter((v) => v.required && !v.value)
+            .map((v) => v.key);
+
+          if (requiredVars.length > 0) {
+            console.log(chalk.bold('\n⚠️  Required configuration:'));
+            requiredVars.forEach((key) => warn(`  ${key} - Please configure this variable`));
+          }
+        } catch (err) {
+          envSpinner.fail('Failed to update environment variables');
+          error(err instanceof Error ? err.message : String(err));
+        }
+      }
+
+      console.log('\n📌 Next steps:');
+      info('  1. Configure environment variables in .env (if needed)');
+      info('  2. Register the module in your main app file');
+      info('  3. Run database migrations if needed');
     } catch (err) {
       spinner.fail('Failed to add module');
       error(err instanceof Error ? err.message : String(err));

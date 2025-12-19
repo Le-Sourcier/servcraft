@@ -247,6 +247,66 @@ servcraft add i18n              # Multi-language support
 servcraft add --list            # Show all modules
 ```
 
+**Automatic Environment Configuration:**
+
+When you add a module, ServCraft automatically:
+- ✅ Adds required environment variables to your `.env` file
+- ✅ Preserves existing variables (no overwrites)
+- ✅ Updates `.env.example` with placeholder values
+- ✅ Shows which variables need configuration
+- ✅ Provides helpful comments for each variable
+
+**Example:**
+
+```bash
+$ servcraft add search
+
+✓ Module 'Search' added successfully!
+
+📁 Files created:
+  ✓ src/modules/search/types.ts
+  ✓ src/modules/search/search.service.ts
+  ✓ src/modules/search/index.ts
+
+✓ Environment variables updated!
+
+✅ Added to .env:
+  ✓ SEARCH_ENGINE
+  ✓ ELASTICSEARCH_NODE
+  ✓ MEILISEARCH_HOST
+
+⏭️  Already in .env (skipped):
+  ℹ REDIS_HOST
+
+⚠️  Required configuration:
+  ⚠ ELASTICSEARCH_USERNAME - Please configure this variable
+  ⚠ ELASTICSEARCH_PASSWORD - Please configure this variable
+
+📌 Next steps:
+  1. Configure environment variables in .env (if needed)
+  2. Register the module in your main app file
+  3. Run database migrations if needed
+```
+
+Your `.env` file will be updated with:
+
+```env
+# Search Configuration (Elasticsearch)
+SEARCH_ENGINE=memory
+# Elasticsearch node URL
+# ELASTICSEARCH_NODE=http://localhost:9200
+# Elasticsearch username (optional)
+# ELASTICSEARCH_USERNAME=
+# Elasticsearch password (optional)
+# ELASTICSEARCH_PASSWORD=
+
+# Search Configuration (Meilisearch)
+# Meilisearch host URL
+# MEILISEARCH_HOST=http://localhost:7700
+# Meilisearch API key (optional)
+# MEILISEARCH_API_KEY=
+```
+
 ### Database commands
 
 ```bash
