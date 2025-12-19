@@ -32,6 +32,8 @@ model User {
   refreshTokens RefreshToken[]
   sessions      Session[]
   auditLogs     AuditLog[]
+  payments      Payment[]
+  subscriptions Subscription[]
 
   @@index([email])
   @@index([status])
@@ -154,4 +156,134 @@ model Setting {
   @@index([key])
   @@index([group])
   @@map("settings")
+}
+
+// ==========================================
+// PAYMENTS & SUBSCRIPTIONS
+// ==========================================
+
+model Payment {
+  id                  String         @id @default(uuid())
+  userId              String
+  user                User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider            PaymentProvider @default(MANUAL)
+  method              PaymentMethod  @default(CARD)
+  status              PaymentStatus  @default(PENDING)
+  amount              Float
+  currency            String         @default("USD")
+  description         String?
+  metadata            Json?
+  providerPaymentId   String?        @unique
+  providerCustomerId  String?
+  refundedAmount      Float?
+  failureReason       String?
+  paidAt              DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([provider])
+  @@index([status])
+  @@index([createdAt])
+  @@index([providerPaymentId])
+  @@map("payments")
+}
+
+enum PaymentProvider {
+  STRIPE
+  PAYPAL
+  MOBILE_MONEY
+  MANUAL
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CARD
+  BANK_TRANSFER
+  MOBILE_MONEY
+  PAYPAL
+  CRYPTO
+  CASH
+}
+
+model Subscription {
+  id                    String             @id @default(uuid())
+  userId                String
+  user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId                String
+  plan                  Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  provider              PaymentProvider    @default(STRIPE)
+  providerSubscriptionId String?           @unique
+  status                SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart    DateTime
+  currentPeriodEnd      DateTime
+  cancelAtPeriodEnd     Boolean            @default(false)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([planId])
+  @@index([status])
+  @@index([providerSubscriptionId])
+  @@map("subscriptions")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  PAST_DUE
+  TRIALING
+  PAUSED
+}
+
+model Plan {
+  id            String         @id @default(uuid())
+  name          String
+  description   String?
+  amount        Float
+  currency      String         @default("USD")
+  interval      PlanInterval   @default(MONTH)
+  intervalCount Int            @default(1)
+  trialDays     Int?
+  features      Json?
+  metadata      Json?
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  // Relations
+  subscriptions Subscription[]
+
+  @@index([active])
+  @@map("plans")
+}
+
+enum PlanInterval {
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
+model PaymentWebhook {
+  id        String          @id @default(uuid())
+  provider  PaymentProvider
+  type      String
+  data      Json
+  processed Boolean         @default(false)
+  error     String?
+  createdAt DateTime        @default(now())
+
+  @@index([provider])
+  @@index([processed])
+  @@index([createdAt])
+  @@map("payment_webhooks")
 }

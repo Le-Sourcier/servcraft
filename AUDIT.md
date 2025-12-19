@@ -60,14 +60,18 @@ ServCraft est un framework backend Node.js modulaire avec **22 modules** et **~2
   - **Bonus :** Enum mapping automatique Prisma ↔ Application types
 
 ### 1.3 Persistance des Données - Payment Module
-- [ ] ⏳ **PAYMENT-001** : Migrer paiements vers Prisma
-  - Fichier : `src/modules/payment/payment.service.ts:20-22`
-  - Remplacer : `Map<string, Payment>` → Prisma
-  - Impact : **CRITIQUE** - Pertes financières possibles
-  - Estimation : 8h
-  - Tests requis : `tests/integration/payment-service.test.ts`
-  - Documentation : `docs/modules/PAYMENT.md`
-  - **SCHÉMA PRISMA REQUIS** : Ajouter modèles Payment, Subscription, Plan
+- [x] ✅ **PAYMENT-001** : Migrer paiements vers Prisma
+  - Fichiers :
+    - `src/modules/payment/payment.repository.ts` ✅ Créé
+    - `prisma/schema.prisma` ✅ Modèles ajoutés (Payment, Subscription, Plan, PaymentWebhook)
+  - Remplacer : `Map<>` → Prisma queries ✅ Fait
+  - Impact : **CRITIQUE** - Pertes financières possibles → **CORRIGÉ**
+  - Temps réel : 8h
+  - Tests : `tests/integration/payment-prisma.test.ts` ✅ Créé (45+ tests)
+  - Documentation : `docs/modules/PAYMENT.md` ✅ Créé
+  - **Complété le :** 2025-12-19
+  - **Commit :** À venir
+  - **Bonus :** Support multi-provider (Stripe, PayPal, Mobile Money), webhooks, subscriptions
 
 ### 1.4 Cache Service - Redis Connection
 - [ ] ⏳ **CACHE-001** : Connecter réellement Redis
