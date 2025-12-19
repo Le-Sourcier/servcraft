@@ -1,5 +1,18 @@
+/**
+ * Feature Flag Service
+ * A/B testing and progressive rollout
+ *
+ * Persistence:
+ * - Flags: Prisma/PostgreSQL (persistent)
+ * - Overrides: Prisma/PostgreSQL (persistent)
+ * - Stats: Redis with TTL (temporary, for performance)
+ * - Events: In-memory circular buffer (runtime only)
+ */
 import { logger } from '../../core/logger.js';
 import { NotFoundError, BadRequestError } from '../../utils/errors.js';
+import { prisma } from '../../database/prisma.js';
+import { getRedis } from '../../database/redis.js';
+import { FeatureFlagRepository } from './feature-flag.repository.js';
 import type {
   FeatureFlag,
   FlagEvaluationContext,
@@ -13,14 +26,11 @@ import type {
   UserAttributeRule,
 } from './types.js';
 
-/**
- * Feature Flag Service
- * A/B testing and progressive rollout
- */
+const FLAG_STATS_PREFIX = 'flagstats:';
+const FLAG_STATS_TTL = 86400; // 24 hours
+
 export class FeatureFlagService {
-  private flags = new Map<string, FeatureFlag>();
-  private overrides = new Map<string, Map<string, FlagOverride>>();
-  private stats = new Map<string, FlagStats>();
+  private repository: FeatureFlagRepository;
   private events: FlagEvent[] = [];
   private config: FeatureFlagConfig;
 
@@ -31,6 +41,7 @@ export class FeatureFlagService {
       cacheTtl: 300,
       ...config,
     };
+    this.repository = new FeatureFlagRepository(prisma);
 
     logger.info('Feature flag service initialized');
   }
@@ -39,25 +50,15 @@ export class FeatureFlagService {
    * Create a feature flag
    */
   async createFlag(flag: Omit<FeatureFlag, 'createdAt' | 'updatedAt'>): Promise<FeatureFlag> {
-    if (this.flags.has(flag.key)) {
+    const existing = await this.repository.getByKey(flag.key);
+    if (existing) {
       throw new BadRequestError(`Flag with key "${flag.key}" already exists`);
     }
 
-    const newFlag: FeatureFlag = {
-      ...flag,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const newFlag = await this.repository.create(flag);
 
-    this.flags.set(flag.key, newFlag);
-
-    // Initialize stats
-    this.stats.set(flag.key, {
-      totalEvaluations: 0,
-      enabledCount: 0,
-      disabledCount: 0,
-      uniqueUsers: 0,
-    });
+    // Initialize stats in Redis
+    await this.initializeStats(flag.key);
 
     this.logEvent({
       type: 'created',
@@ -76,21 +77,11 @@ export class FeatureFlagService {
    * Update a feature flag
    */
   async updateFlag(key: string, updates: Partial<FeatureFlag>): Promise<FeatureFlag> {
-    const flag = this.flags.get(key);
+    const flag = await this.repository.update(key, updates);
 
     if (!flag) {
       throw new NotFoundError(`Flag "${key}" not found`);
     }
-
-    const updatedFlag: FeatureFlag = {
-      ...flag,
-      ...updates,
-      key: flag.key, // Prevent key change
-      createdAt: flag.createdAt,
-      updatedAt: new Date(),
-    };
-
-    this.flags.set(key, updatedFlag);
 
     this.logEvent({
       type: 'updated',
@@ -101,22 +92,22 @@ export class FeatureFlagService {
 
     logger.info({ flagKey: key }, 'Feature flag updated');
 
-    return updatedFlag;
+    return flag;
   }
 
   /**
    * Delete a feature flag
    */
   async deleteFlag(key: string): Promise<void> {
-    const flag = this.flags.get(key);
+    const deleted = await this.repository.delete(key);
 
-    if (!flag) {
+    if (!deleted) {
       throw new NotFoundError(`Flag "${key}" not found`);
     }
 
-    this.flags.delete(key);
-    this.overrides.delete(key);
-    this.stats.delete(key);
+    // Clean up stats
+    const redis = getRedis();
+    await redis.del(`${FLAG_STATS_PREFIX}${key}`);
 
     this.logEvent({
       type: 'deleted',
@@ -131,7 +122,7 @@ export class FeatureFlagService {
    * Get a feature flag
    */
   async getFlag(key: string): Promise<FeatureFlag> {
-    const flag = this.flags.get(key);
+    const flag = await this.repository.getByKey(key);
 
     if (!flag) {
       throw new NotFoundError(`Flag "${key}" not found`);
@@ -144,40 +135,14 @@ export class FeatureFlagService {
    * List feature flags
    */
   async listFlags(filters?: FlagListFilters): Promise<FeatureFlag[]> {
-    let flags = Array.from(this.flags.values());
-
-    // Apply filters
-    if (filters) {
-      if (filters.status) {
-        flags = flags.filter((f) => f.status === filters.status);
-      }
-
-      if (filters.environment) {
-        flags = flags.filter((f) => f.environment === filters.environment);
-      }
-
-      if (filters.tags && filters.tags.length > 0) {
-        flags = flags.filter((f) => f.tags?.some((t) => filters.tags!.includes(t)));
-      }
-
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        flags = flags.filter(
-          (f) =>
-            f.name.toLowerCase().includes(searchLower) ||
-            f.description?.toLowerCase().includes(searchLower)
-        );
-      }
-    }
-
-    return flags;
+    return this.repository.list(filters);
   }
 
   /**
    * Evaluate a feature flag
    */
   async evaluateFlag(key: string, context: FlagEvaluationContext): Promise<FlagEvaluationResult> {
-    const flag = this.flags.get(key);
+    const flag = await this.repository.getByKey(key);
 
     if (!flag) {
       throw new NotFoundError(`Flag "${key}" not found`);
@@ -189,7 +154,7 @@ export class FeatureFlagService {
     }
 
     // Check for overrides
-    const override = this.getOverride(key, context);
+    const override = await this.getOverride(key, context);
     if (override) {
       return this.createResult(key, override.enabled, 'Override active', flag.strategy);
     }
@@ -231,7 +196,7 @@ export class FeatureFlagService {
     }
 
     // Track statistics
-    this.trackEvaluation(key, enabled, context);
+    await this.trackEvaluation(key, enabled, context);
 
     // Log event
     this.logEvent({
@@ -284,23 +249,18 @@ export class FeatureFlagService {
     enabled: boolean,
     expiresAt?: Date
   ): Promise<void> {
-    const flag = this.flags.get(flagKey);
-
+    // Verify flag exists
+    const flag = await this.repository.getByKey(flagKey);
     if (!flag) {
       throw new NotFoundError(`Flag "${flagKey}" not found`);
     }
 
-    if (!this.overrides.has(flagKey)) {
-      this.overrides.set(flagKey, new Map());
-    }
-
-    const flagOverrides = this.overrides.get(flagKey)!;
-    flagOverrides.set(targetId, {
+    await this.repository.createOverride({
+      flagKey,
       targetId,
       targetType,
       enabled,
       expiresAt,
-      createdAt: new Date(),
     });
 
     this.logEvent({
@@ -318,11 +278,9 @@ export class FeatureFlagService {
    * Remove override
    */
   async removeOverride(flagKey: string, targetId: string): Promise<void> {
-    const flagOverrides = this.overrides.get(flagKey);
+    const deleted = await this.repository.deleteOverride(flagKey, targetId);
 
-    if (flagOverrides) {
-      flagOverrides.delete(targetId);
-
+    if (deleted) {
       this.logEvent({
         type: 'override-removed',
         flagKey,
@@ -338,13 +296,19 @@ export class FeatureFlagService {
    * Get flag statistics
    */
   async getStats(key: string): Promise<FlagStats> {
-    const stats = this.stats.get(key);
+    const redis = getRedis();
+    const statsJson = await redis.get(`${FLAG_STATS_PREFIX}${key}`);
 
-    if (!stats) {
-      throw new NotFoundError(`Stats for flag "${key}" not found`);
+    if (!statsJson) {
+      return {
+        totalEvaluations: 0,
+        enabledCount: 0,
+        disabledCount: 0,
+        uniqueUsers: 0,
+      };
     }
 
-    return stats;
+    return JSON.parse(statsJson) as FlagStats;
   }
 
   /**
@@ -352,6 +316,43 @@ export class FeatureFlagService {
    */
   async getEvents(flagKey: string, limit = 100): Promise<FlagEvent[]> {
     return this.events.filter((e) => e.flagKey === flagKey).slice(-limit);
+  }
+
+  // ==========================================
+  // PRIVATE METHODS
+  // ==========================================
+
+  /**
+   * Get override for context
+   */
+  private async getOverride(
+    flagKey: string,
+    context: FlagEvaluationContext
+  ): Promise<FlagOverride | null> {
+    // Check user override
+    if (context.userId) {
+      const userOverride = await this.repository.getOverride(flagKey, context.userId);
+      if (userOverride && this.isOverrideValid(userOverride)) {
+        return userOverride;
+      }
+    }
+
+    // Check session override
+    if (context.sessionId) {
+      const sessionOverride = await this.repository.getOverride(flagKey, context.sessionId);
+      if (sessionOverride && this.isOverrideValid(sessionOverride)) {
+        return sessionOverride;
+      }
+    }
+
+    return null;
+  }
+
+  private isOverrideValid(override: FlagOverride): boolean {
+    if (!override.expiresAt) {
+      return true;
+    }
+    return new Date() < override.expiresAt;
   }
 
   /**
@@ -362,7 +363,6 @@ export class FeatureFlagService {
       return false;
     }
 
-    // Use userId or sessionId for consistent hashing
     const id = context.userId || context.sessionId || '';
     const hash = this.hashString(id);
     const bucket = hash % 100;
@@ -389,13 +389,9 @@ export class FeatureFlagService {
       return false;
     }
 
-    // All rules must match (AND logic)
     return config.userAttributes.every((rule) => this.evaluateAttributeRule(rule, context));
   }
 
-  /**
-   * Evaluate single attribute rule
-   */
   private evaluateAttributeRule(rule: UserAttributeRule, context: FlagEvaluationContext): boolean {
     const userValue = context.userAttributes?.[rule.attribute];
 
@@ -453,56 +449,45 @@ export class FeatureFlagService {
   }
 
   /**
-   * Get override for context
+   * Initialize stats for a flag
    */
-  private getOverride(flagKey: string, context: FlagEvaluationContext): FlagOverride | null {
-    const flagOverrides = this.overrides.get(flagKey);
+  private async initializeStats(key: string): Promise<void> {
+    const stats: FlagStats = {
+      totalEvaluations: 0,
+      enabledCount: 0,
+      disabledCount: 0,
+      uniqueUsers: 0,
+    };
 
-    if (!flagOverrides) {
-      return null;
-    }
-
-    // Check user override
-    if (context.userId) {
-      const userOverride = flagOverrides.get(context.userId);
-      if (userOverride && this.isOverrideValid(userOverride)) {
-        return userOverride;
-      }
-    }
-
-    // Check session override
-    if (context.sessionId) {
-      const sessionOverride = flagOverrides.get(context.sessionId);
-      if (sessionOverride && this.isOverrideValid(sessionOverride)) {
-        return sessionOverride;
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Check if override is still valid
-   */
-  private isOverrideValid(override: FlagOverride): boolean {
-    if (!override.expiresAt) {
-      return true;
-    }
-
-    return new Date() < override.expiresAt;
+    const redis = getRedis();
+    await redis.setex(`${FLAG_STATS_PREFIX}${key}`, FLAG_STATS_TTL, JSON.stringify(stats));
   }
 
   /**
    * Track evaluation statistics
    */
-  private trackEvaluation(key: string, enabled: boolean, context: FlagEvaluationContext): void {
+  private async trackEvaluation(
+    key: string,
+    enabled: boolean,
+    context: FlagEvaluationContext
+  ): Promise<void> {
     if (!this.config.analytics) {
       return;
     }
 
-    const stats = this.stats.get(key);
+    try {
+      const redis = getRedis();
+      const statsJson = await redis.get(`${FLAG_STATS_PREFIX}${key}`);
 
-    if (stats) {
+      const stats: FlagStats = statsJson
+        ? JSON.parse(statsJson)
+        : {
+            totalEvaluations: 0,
+            enabledCount: 0,
+            disabledCount: 0,
+            uniqueUsers: 0,
+          };
+
       stats.totalEvaluations++;
       if (enabled) {
         stats.enabledCount++;
@@ -515,6 +500,10 @@ export class FeatureFlagService {
       }
 
       stats.lastEvaluatedAt = new Date();
+
+      await redis.setex(`${FLAG_STATS_PREFIX}${key}`, FLAG_STATS_TTL, JSON.stringify(stats));
+    } catch (error) {
+      logger.warn({ err: error, key }, 'Failed to track flag evaluation');
     }
   }
 
@@ -542,7 +531,7 @@ export class FeatureFlagService {
   private logEvent(event: FlagEvent): void {
     this.events.push(event);
 
-    // Keep only last 1000 events
+    // Keep only last 1000 events (circular buffer)
     if (this.events.length > 1000) {
       this.events.shift();
     }
@@ -556,8 +545,22 @@ export class FeatureFlagService {
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
       hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32bit integer
+      hash = hash & hash;
     }
     return Math.abs(hash);
   }
+}
+
+let featureFlagService: FeatureFlagService | null = null;
+
+export function getFeatureFlagService(): FeatureFlagService {
+  if (!featureFlagService) {
+    featureFlagService = new FeatureFlagService();
+  }
+  return featureFlagService;
+}
+
+export function createFeatureFlagService(config?: FeatureFlagConfig): FeatureFlagService {
+  featureFlagService = new FeatureFlagService(config);
+  return featureFlagService;
 }
