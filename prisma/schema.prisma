@@ -439,3 +439,113 @@ enum MFAMethod {
   EMAIL
   BACKUP_CODES
 }
+
+// ==========================================
+// WEBHOOKS
+// ==========================================
+
+model WebhookEndpoint {
+  id          String              @id @default(uuid())
+  url         String
+  secret      String
+  events      String[]            // Event types to listen to
+  enabled     Boolean             @default(true)
+  description String?
+  headers     Json?               // Custom headers
+  metadata    Json?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  // Relations
+  deliveries  WebhookDelivery[]
+
+  @@index([enabled])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id             String                @id @default(uuid())
+  endpointId     String
+  endpoint       WebhookEndpoint       @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  eventType      String
+  status         WebhookDeliveryStatus @default(PENDING)
+  payload        Json
+  attempts       Int                   @default(0)
+  maxAttempts    Int                   @default(5)
+  responseStatus Int?
+  responseBody   String?
+  error          String?
+  nextRetryAt    DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime              @default(now())
+
+  @@index([endpointId])
+  @@index([status])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("webhook_deliveries")
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  RETRYING
+  SUCCESS
+  FAILED
+}
+
+// ==========================================
+// FEATURE FLAGS
+// ==========================================
+
+model FeatureFlag {
+  id          String             @id @default(uuid())
+  key         String             @unique
+  name        String
+  description String?
+  status      FeatureFlagStatus  @default(DISABLED)
+  strategy    FlagStrategy       @default(BOOLEAN)
+  config      Json               // Strategy-specific configuration
+  environment String?
+  tags        String[]           @default([])
+  createdBy   String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  // Relations
+  overrides   FlagOverride[]
+
+  @@index([key])
+  @@index([status])
+  @@index([environment])
+  @@map("feature_flags")
+}
+
+model FlagOverride {
+  id          String      @id @default(uuid())
+  flagId      String
+  flag        FeatureFlag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+  targetId    String      // userId or sessionId
+  targetType  String      // 'user' or 'session'
+  enabled     Boolean
+  expiresAt   DateTime?
+  createdAt   DateTime    @default(now())
+
+  @@unique([flagId, targetId])
+  @@index([flagId])
+  @@index([targetId])
+  @@map("flag_overrides")
+}
+
+enum FeatureFlagStatus {
+  ENABLED
+  DISABLED
+  ARCHIVED
+}
+
+enum FlagStrategy {
+  BOOLEAN
+  PERCENTAGE
+  USER_LIST
+  USER_ATTRIBUTE
+  DATE_RANGE
+}
