@@ -3,6 +3,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import { logger } from '../../core/logger.js';
 import { BadRequestError, NotFoundError } from '../../utils/errors.js';
+import { prisma } from '../../database/prisma.js';
+import { UploadRepository } from './upload.repository.js';
 import type {
   UploadConfig,
   UploadedFile,
@@ -10,9 +12,6 @@ import type {
   MultipartFile,
   ImageTransformOptions,
 } from './types.js';
-
-// In-memory storage for file metadata
-const files = new Map<string, UploadedFile>();
 
 const defaultConfig: UploadConfig = {
   provider: 'local',
@@ -34,9 +33,11 @@ const defaultConfig: UploadConfig = {
 
 export class UploadService {
   private config: UploadConfig;
+  private repository: UploadRepository;
 
   constructor(config: Partial<UploadConfig> = {}) {
     this.config = { ...defaultConfig, ...config };
+    this.repository = new UploadRepository(prisma);
   }
 
   async upload(file: MultipartFile, options: UploadOptions = {}): Promise<UploadedFile> {
@@ -64,10 +65,12 @@ export class UploadService {
     }
 
     const uploadedFile = await this.saveFile(file, processedBuffer, options);
-    files.set(uploadedFile.id, uploadedFile);
 
-    logger.info({ fileId: uploadedFile.id, size: uploadedFile.size }, 'File uploaded');
-    return uploadedFile;
+    // Save metadata to database
+    const savedFile = await this.repository.create(uploadedFile);
+
+    logger.info({ fileId: savedFile.id, size: savedFile.size }, 'File uploaded');
+    return savedFile;
   }
 
   async uploadMultiple(
@@ -83,16 +86,17 @@ export class UploadService {
   }
 
   async getFile(fileId: string): Promise<UploadedFile | null> {
-    return files.get(fileId) || null;
+    return this.repository.getById(fileId);
   }
 
   async deleteFile(fileId: string): Promise<void> {
-    const file = files.get(fileId);
+    const file = await this.repository.getById(fileId);
     if (!file) {
       throw new NotFoundError('File');
     }
 
-    switch (this.config.provider) {
+    // Delete actual file from storage
+    switch (file.provider) {
       case 'local':
         await this.deleteLocal(file.path);
         break;
@@ -107,17 +111,18 @@ export class UploadService {
         break;
     }
 
-    files.delete(fileId);
+    // Delete metadata from database
+    await this.repository.delete(fileId);
     logger.info({ fileId }, 'File deleted');
   }
 
   async getSignedUrl(fileId: string, expiresIn = 3600): Promise<string> {
-    const file = files.get(fileId);
+    const file = await this.repository.getById(fileId);
     if (!file) {
       throw new NotFoundError('File');
     }
 
-    switch (this.config.provider) {
+    switch (file.provider) {
       case 's3':
         return this.getS3SignedUrl(file.path, expiresIn);
       case 'gcs':
@@ -125,6 +130,59 @@ export class UploadService {
       default:
         return file.url;
     }
+  }
+
+  /**
+   * Get files by user ID
+   */
+  async getFilesByUser(
+    userId: string,
+    options?: { limit?: number; offset?: number }
+  ): Promise<UploadedFile[]> {
+    return this.repository.getByUserId(userId, options);
+  }
+
+  /**
+   * Get total storage used by user
+   */
+  async getUserStorageUsage(userId: string): Promise<{ totalSize: number; fileCount: number }> {
+    const [totalSize, fileCount] = await Promise.all([
+      this.repository.getTotalSizeByUser(userId),
+      this.repository.countByUser(userId),
+    ]);
+    return { totalSize, fileCount };
+  }
+
+  /**
+   * Delete all files for a user
+   */
+  async deleteUserFiles(userId: string): Promise<number> {
+    const files = await this.repository.getByUserId(userId);
+
+    // Delete actual files
+    for (const file of files) {
+      try {
+        switch (file.provider) {
+          case 'local':
+            await this.deleteLocal(file.path);
+            break;
+          case 's3':
+            await this.deleteS3(file.path);
+            break;
+          case 'cloudinary':
+            await this.deleteCloudinary(file.path);
+            break;
+          case 'gcs':
+            await this.deleteGCS(file.path);
+            break;
+        }
+      } catch (error) {
+        logger.warn({ fileId: file.id, error }, 'Failed to delete file from storage');
+      }
+    }
+
+    // Delete all metadata records
+    return this.repository.deleteByUserId(userId);
   }
 
   // Private methods

@@ -343,3 +343,35 @@ model NotificationTemplate {
   @@index([active])
   @@map("notification_templates")
 }
+
+// ==========================================
+// FILE UPLOADS
+// ==========================================
+
+model UploadedFile {
+  id           String          @id @default(uuid())
+  userId       String?
+  originalName String
+  filename     String
+  mimetype     String
+  size         Int
+  path         String
+  url          String
+  provider     StorageProvider @default(LOCAL)
+  bucket       String?
+  metadata     Json?
+  createdAt    DateTime        @default(now())
+
+  @@index([userId])
+  @@index([provider])
+  @@index([mimetype])
+  @@index([createdAt])
+  @@map("uploaded_files")
+}
+
+enum StorageProvider {
+  LOCAL
+  S3
+  CLOUDINARY
+  GCS
+}
