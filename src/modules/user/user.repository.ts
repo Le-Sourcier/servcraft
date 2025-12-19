@@ -1,148 +1,277 @@
-import { randomUUID } from 'crypto';
+import { prisma } from '../../database/prisma.js';
 import type { PaginatedResult, PaginationParams } from '../../types/index.js';
 import { createPaginatedResult, getSkip } from '../../utils/pagination.js';
 import type { User, CreateUserData, UpdateUserData, UserFilters } from './types.js';
+import { UserRole, UserStatus } from '@prisma/client';
 
-// In-memory storage for development (will be replaced by Prisma)
-const users = new Map<string, User>();
-
+/**
+ * User Repository - Prisma Implementation
+ * Manages user data persistence using Prisma ORM
+ */
 export class UserRepository {
+  /**
+   * Find user by ID
+   */
   async findById(id: string): Promise<User | null> {
-    return users.get(id) || null;
+    const user = await prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!user) return null;
+    return this.mapPrismaUserToUser(user);
   }
 
+  /**
+   * Find user by email (case-insensitive)
+   */
   async findByEmail(email: string): Promise<User | null> {
-    for (const user of users.values()) {
-      if (user.email.toLowerCase() === email.toLowerCase()) {
-        return user;
-      }
-    }
-    return null;
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (!user) return null;
+    return this.mapPrismaUserToUser(user);
   }
 
+  /**
+   * Find multiple users with pagination and filters
+   */
   async findMany(params: PaginationParams, filters?: UserFilters): Promise<PaginatedResult<User>> {
-    let filteredUsers = Array.from(users.values());
+    const where = this.buildWhereClause(filters);
+    const orderBy = this.buildOrderBy(params);
 
-    // Apply filters
-    if (filters) {
-      if (filters.status) {
-        filteredUsers = filteredUsers.filter((u) => u.status === filters.status);
-      }
-      if (filters.role) {
-        filteredUsers = filteredUsers.filter((u) => u.role === filters.role);
-      }
-      if (filters.emailVerified !== undefined) {
-        filteredUsers = filteredUsers.filter((u) => u.emailVerified === filters.emailVerified);
-      }
-      if (filters.search) {
-        const search = filters.search.toLowerCase();
-        filteredUsers = filteredUsers.filter(
-          (u) => u.email.toLowerCase().includes(search) || u.name?.toLowerCase().includes(search)
-        );
-      }
-    }
+    const [data, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        orderBy,
+        skip: getSkip(params),
+        take: params.limit,
+      }),
+      prisma.user.count({ where }),
+    ]);
 
-    // Sort
-    if (params.sortBy) {
-      const sortKey = params.sortBy as keyof User;
-      filteredUsers.sort((a, b) => {
-        const aVal = a[sortKey];
-        const bVal = b[sortKey];
-        if (aVal === undefined || bVal === undefined) return 0;
-        if (aVal < bVal) return params.sortOrder === 'desc' ? 1 : -1;
-        if (aVal > bVal) return params.sortOrder === 'desc' ? -1 : 1;
-        return 0;
-      });
-    }
+    const mappedUsers = data.map((user) => this.mapPrismaUserToUser(user));
 
-    const total = filteredUsers.length;
-    const skip = getSkip(params);
-    const data = filteredUsers.slice(skip, skip + params.limit);
-
-    return createPaginatedResult(data, total, params);
+    return createPaginatedResult(mappedUsers, total, params);
   }
 
+  /**
+   * Create a new user
+   */
   async create(data: CreateUserData): Promise<User> {
-    const now = new Date();
-    const user: User = {
-      id: randomUUID(),
-      email: data.email,
-      password: data.password,
-      name: data.name,
-      role: data.role || 'user',
-      status: 'active',
-      emailVerified: false,
-      createdAt: now,
-      updatedAt: now,
-    };
+    const user = await prisma.user.create({
+      data: {
+        email: data.email.toLowerCase(),
+        password: data.password,
+        name: data.name,
+        role: this.mapRoleToEnum(data.role || 'user'),
+        status: UserStatus.ACTIVE,
+        emailVerified: false,
+      },
+    });
 
-    users.set(user.id, user);
-    return user;
+    return this.mapPrismaUserToUser(user);
   }
 
+  /**
+   * Update user data
+   */
   async update(id: string, data: UpdateUserData): Promise<User | null> {
-    const user = users.get(id);
-    if (!user) return null;
+    try {
+      const user = await prisma.user.update({
+        where: { id },
+        data: {
+          ...(data.email && { email: data.email.toLowerCase() }),
+          ...(data.name !== undefined && { name: data.name }),
+          ...(data.role && { role: this.mapRoleToEnum(data.role) }),
+          ...(data.status && { status: this.mapStatusToEnum(data.status) }),
+          ...(data.emailVerified !== undefined && { emailVerified: data.emailVerified }),
+          ...(data.metadata && { metadata: data.metadata as object }),
+        },
+      });
 
-    const updatedUser: User = {
-      ...user,
-      ...data,
-      updatedAt: new Date(),
-    };
-
-    users.set(id, updatedUser);
-    return updatedUser;
-  }
-
-  async updatePassword(id: string, password: string): Promise<User | null> {
-    const user = users.get(id);
-    if (!user) return null;
-
-    const updatedUser: User = {
-      ...user,
-      password,
-      updatedAt: new Date(),
-    };
-
-    users.set(id, updatedUser);
-    return updatedUser;
-  }
-
-  async updateLastLogin(id: string): Promise<User | null> {
-    const user = users.get(id);
-    if (!user) return null;
-
-    const updatedUser: User = {
-      ...user,
-      lastLoginAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    users.set(id, updatedUser);
-    return updatedUser;
-  }
-
-  async delete(id: string): Promise<boolean> {
-    return users.delete(id);
-  }
-
-  async count(filters?: UserFilters): Promise<number> {
-    let count = 0;
-    for (const user of users.values()) {
-      if (filters) {
-        if (filters.status && user.status !== filters.status) continue;
-        if (filters.role && user.role !== filters.role) continue;
-        if (filters.emailVerified !== undefined && user.emailVerified !== filters.emailVerified)
-          continue;
-      }
-      count++;
+      return this.mapPrismaUserToUser(user);
+    } catch {
+      // User not found
+      return null;
     }
-    return count;
   }
 
-  // Helper to clear all users (for testing)
+  /**
+   * Update user password
+   */
+  async updatePassword(id: string, password: string): Promise<User | null> {
+    try {
+      const user = await prisma.user.update({
+        where: { id },
+        data: { password },
+      });
+
+      return this.mapPrismaUserToUser(user);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Update last login timestamp
+   */
+  async updateLastLogin(id: string): Promise<User | null> {
+    try {
+      const user = await prisma.user.update({
+        where: { id },
+        data: { lastLoginAt: new Date() },
+      });
+
+      return this.mapPrismaUserToUser(user);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Delete user by ID
+   */
+  async delete(id: string): Promise<boolean> {
+    try {
+      await prisma.user.delete({
+        where: { id },
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Count users with optional filters
+   */
+  async count(filters?: UserFilters): Promise<number> {
+    const where = this.buildWhereClause(filters);
+    return prisma.user.count({ where });
+  }
+
+  /**
+   * Helper to clear all users (for testing only)
+   * WARNING: This deletes all users from the database
+   */
   async clear(): Promise<void> {
-    users.clear();
+    await prisma.user.deleteMany();
+  }
+
+  /**
+   * Build Prisma where clause from filters
+   */
+  private buildWhereClause(filters?: UserFilters): object {
+    if (!filters) return {};
+
+    return {
+      ...(filters.status && { status: this.mapStatusToEnum(filters.status) }),
+      ...(filters.role && { role: this.mapRoleToEnum(filters.role) }),
+      ...(filters.emailVerified !== undefined && { emailVerified: filters.emailVerified }),
+      ...(filters.search && {
+        OR: [
+          { email: { contains: filters.search, mode: 'insensitive' as const } },
+          { name: { contains: filters.search, mode: 'insensitive' as const } },
+        ],
+      }),
+    };
+  }
+
+  /**
+   * Build Prisma orderBy clause from pagination params
+   */
+  private buildOrderBy(params: PaginationParams): object {
+    if (!params.sortBy) {
+      return { createdAt: 'desc' as const };
+    }
+
+    return {
+      [params.sortBy]: params.sortOrder || 'asc',
+    };
+  }
+
+  /**
+   * Map Prisma User to application User type
+   */
+  private mapPrismaUserToUser(prismaUser: {
+    id: string;
+    email: string;
+    password: string;
+    name: string | null;
+    role: UserRole;
+    status: UserStatus;
+    emailVerified: boolean;
+    lastLoginAt: Date | null;
+    metadata: unknown;
+    createdAt: Date;
+    updatedAt: Date;
+  }): User {
+    return {
+      id: prismaUser.id,
+      email: prismaUser.email,
+      password: prismaUser.password,
+      name: prismaUser.name ?? undefined,
+      role: this.mapEnumToRole(prismaUser.role),
+      status: this.mapEnumToStatus(prismaUser.status),
+      emailVerified: prismaUser.emailVerified,
+      lastLoginAt: prismaUser.lastLoginAt ?? undefined,
+      metadata: prismaUser.metadata as Record<string, unknown> | undefined,
+      createdAt: prismaUser.createdAt,
+      updatedAt: prismaUser.updatedAt,
+    };
+  }
+
+  /**
+   * Map application role to Prisma enum
+   */
+  private mapRoleToEnum(role: string): UserRole {
+    const roleMap: Record<string, UserRole> = {
+      user: UserRole.USER,
+      moderator: UserRole.MODERATOR,
+      admin: UserRole.ADMIN,
+      super_admin: UserRole.SUPER_ADMIN,
+    };
+    return roleMap[role] || UserRole.USER;
+  }
+
+  /**
+   * Map Prisma enum to application role
+   */
+  private mapEnumToRole(role: UserRole): User['role'] {
+    const roleMap: Record<UserRole, User['role']> = {
+      [UserRole.USER]: 'user',
+      [UserRole.MODERATOR]: 'moderator',
+      [UserRole.ADMIN]: 'admin',
+      [UserRole.SUPER_ADMIN]: 'super_admin',
+    };
+    return roleMap[role];
+  }
+
+  /**
+   * Map application status to Prisma enum
+   */
+  private mapStatusToEnum(status: string): UserStatus {
+    const statusMap: Record<string, UserStatus> = {
+      active: UserStatus.ACTIVE,
+      inactive: UserStatus.INACTIVE,
+      suspended: UserStatus.SUSPENDED,
+      banned: UserStatus.BANNED,
+    };
+    return statusMap[status] || UserStatus.ACTIVE;
+  }
+
+  /**
+   * Map Prisma enum to application status
+   */
+  private mapEnumToStatus(status: UserStatus): User['status'] {
+    const statusMap: Record<UserStatus, User['status']> = {
+      [UserStatus.ACTIVE]: 'active',
+      [UserStatus.INACTIVE]: 'inactive',
+      [UserStatus.SUSPENDED]: 'suspended',
+      [UserStatus.BANNED]: 'banned',
+    };
+    return statusMap[status];
   }
 }
 

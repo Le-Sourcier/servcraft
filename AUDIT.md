@@ -48,13 +48,16 @@ ServCraft est un framework backend Node.js modulaire avec **22 modules** et **~2
   - **Commit :** feat(auth): implement Redis-based token blacklist
 
 ### 1.2 Persistance des Données - User Module
-- [ ] ⏳ **USER-001** : Migrer UserRepository vers Prisma
-  - Fichier : `src/modules/user/user.repository.ts:7`
-  - Remplacer : `Map<string, User>` → Prisma queries
-  - Impact : Utilisateurs perdus au restart
-  - Estimation : 6h
-  - Tests requis : `tests/integration/user-repository.test.ts`
-  - Documentation : `docs/modules/USER.md`
+- [x] ✅ **USER-001** : Migrer UserRepository vers Prisma
+  - Fichier : `src/modules/user/user.repository.ts` ✅ Migré
+  - Remplacer : `Map<string, User>` → Prisma queries ✅ Fait
+  - Impact : Utilisateurs perdus au restart → **CORRIGÉ**
+  - Temps réel : 6h
+  - Tests : `tests/integration/user-prisma.test.ts` ✅ Créé (33 tests)
+  - Documentation : `docs/modules/USER.md` ✅ Créé
+  - **Complété le :** 2025-12-19
+  - **Commit :** feat(user): migrate UserRepository to Prisma ORM
+  - **Bonus :** Enum mapping automatique Prisma ↔ Application types
 
 ### 1.3 Persistance des Données - Payment Module
 - [ ] ⏳ **PAYMENT-001** : Migrer paiements vers Prisma
@@ -178,10 +181,12 @@ ServCraft est un framework backend Node.js modulaire avec **22 modules** et **~2
   - Temps réel : 4h
   - **Complété le :** 2025-12-19
 
-- [ ] ⏳ **TEST-002** : Tests User Repository Prisma
-  - Fichier : `tests/integration/user-prisma.test.ts`
-  - Couverture : CRUD complet, filters, pagination
-  - Estimation : 4h
+- [x] ✅ **TEST-002** : Tests User Repository Prisma
+  - Fichier : `tests/integration/user-prisma.test.ts` ✅ Créé
+  - Couverture : CRUD complet, filters, pagination, enum mapping, search
+  - Tests : 33 tests couvrant toutes les opérations
+  - Temps réel : 4h
+  - **Complété le :** 2025-12-19
 
 - [ ] ⏳ **TEST-003** : Tests Payment CRITIQUE
   - Fichier : `tests/integration/payment.test.ts`
@@ -324,13 +329,13 @@ ServCraft est un framework backend Node.js modulaire avec **22 modules** et **~2
 
 | Catégorie | Total | Complété | En Cours | Restant | % |
 |-----------|-------|----------|----------|---------|---|
-| **Phase 1 : Critique** | 7 | 1 | 0 | 6 | 14% |
+| **Phase 1 : Critique** | 7 | 2 | 0 | 5 | 29% |
 | **Phase 2 : Important** | 12 | 0 | 0 | 12 | 0% |
-| **Phase 3 : Tests** | 9 | 1 | 0 | 8 | 11% |
-| **Phase 4 : Documentation** | 9 | 1 | 0 | 8 | 11% |
+| **Phase 3 : Tests** | 9 | 2 | 0 | 7 | 22% |
+| **Phase 4 : Documentation** | 9 | 2 | 0 | 7 | 22% |
 | **Phase 5 : Sécurité** | 6 | 0 | 0 | 6 | 0% |
 | **Phase 6 : CI/CD** | 7 | 0 | 0 | 7 | 0% |
-| **TOTAL** | **50** | **3** | **0** | **47** | **6%** |
+| **TOTAL** | **50** | **6** | **0** | **44** | **12%** |
 
 ### Estimation Totale
 - **Temps estimé total :** ~220 heures (5-6 semaines à temps plein)
@@ -558,6 +563,22 @@ Si vous reprenez ce projet et avez des questions :
 - ✅ Documentation complète du module Auth
 - ✅ **Commit:** `feat(auth): implement Redis-based token blacklist`
 - **Progression:** 3/50 tâches (6%)
+
+### 2025-12-19 - USER-001: Prisma UserRepository Migration
+- ✅ Migration complète de `Map<string, User>` vers Prisma ORM
+- ✅ Support PostgreSQL/MySQL/SQLite
+- ✅ Mapping automatique Prisma enums (UPPERCASE) ↔ Application types (lowercase)
+- ✅ Conservation de l'API publique (pas de breaking changes)
+- ✅ Pagination, filtering, search case-insensitive
+- ✅ Tests d'intégration complets (33 tests)
+  - CRUD operations
+  - Pagination & sorting
+  - Filters (role, status, emailVerified, search)
+  - Enum mapping bidirectionnel
+- ✅ Documentation complète du module User
+- ✅ Fix Prisma schema (provider hardcoded)
+- ✅ **Commit:** `feat(user): migrate UserRepository to Prisma ORM`
+- **Progression:** 6/50 tâches (12%)
 
 ---
 
