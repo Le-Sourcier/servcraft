@@ -1,26 +1,35 @@
-import { randomUUID } from 'crypto';
+/**
+ * OAuth Service
+ * Handles OAuth authentication with multiple providers
+ *
+ * Persistence:
+ * - OAuth states: Redis with TTL (temporary, 10-minute expiration)
+ * - Linked accounts: Prisma/PostgreSQL (persistent)
+ */
 import { logger } from '../../core/logger.js';
 import { BadRequestError, NotFoundError } from '../../utils/errors.js';
+import { prisma } from '../../database/prisma.js';
+import { getRedis } from '../../database/redis.js';
+import { OAuthRepository } from './oauth.repository.js';
 import { GoogleOAuthProvider } from './providers/google.provider.js';
 import { FacebookOAuthProvider } from './providers/facebook.provider.js';
 import { GitHubOAuthProvider } from './providers/github.provider.js';
 import type { OAuthConfig, OAuthProvider, OAuthUser, OAuthState, LinkedAccount } from './types.js';
 
-// In-memory state storage (use Redis in production)
-const oauthStates = new Map<string, OAuthState>();
-const linkedAccounts = new Map<string, LinkedAccount>();
-
 // State expiration time (10 minutes)
-const STATE_EXPIRATION = 10 * 60 * 1000;
+const STATE_EXPIRATION_SECONDS = 10 * 60;
+const OAUTH_STATE_PREFIX = 'oauth:state:';
 
 export class OAuthService {
   private config: OAuthConfig;
+  private repository: OAuthRepository;
   private googleProvider?: GoogleOAuthProvider;
   private facebookProvider?: FacebookOAuthProvider;
   private githubProvider?: GitHubOAuthProvider;
 
   constructor(config: OAuthConfig) {
     this.config = config;
+    this.repository = new OAuthRepository(prisma);
 
     if (config.google) {
       this.googleProvider = new GoogleOAuthProvider(config.google, config.callbackBaseUrl);
@@ -31,20 +40,22 @@ export class OAuthService {
     if (config.github) {
       this.githubProvider = new GitHubOAuthProvider(config.github, config.callbackBaseUrl);
     }
-
-    // Cleanup expired states periodically
-    setInterval(() => this.cleanupExpiredStates(), 60000);
   }
 
   /**
    * Get authorization URL for a provider
    */
-  getAuthorizationUrl(provider: OAuthProvider): { url: string; state: string } {
+  async getAuthorizationUrl(provider: OAuthProvider): Promise<{ url: string; state: string }> {
     const providerInstance = this.getProvider(provider);
     const { url, state } = providerInstance.generateAuthUrl();
 
-    // Store state for validation
-    oauthStates.set(state.state, state);
+    // Store state in Redis with TTL
+    const redis = getRedis();
+    await redis.setex(
+      `${OAUTH_STATE_PREFIX}${state.state}`,
+      STATE_EXPIRATION_SECONDS,
+      JSON.stringify(state)
+    );
 
     logger.debug({ provider, state: state.state }, 'OAuth authorization URL generated');
 
@@ -55,20 +66,18 @@ export class OAuthService {
    * Handle OAuth callback
    */
   async handleCallback(provider: OAuthProvider, code: string, state: string): Promise<OAuthUser> {
-    // Validate state
-    const storedState = oauthStates.get(state);
-    if (!storedState) {
+    // Validate state from Redis
+    const redis = getRedis();
+    const storedStateJson = await redis.get(`${OAUTH_STATE_PREFIX}${state}`);
+
+    if (!storedStateJson) {
       throw new BadRequestError('Invalid or expired OAuth state');
     }
 
-    // Check expiration
-    if (Date.now() - storedState.createdAt > STATE_EXPIRATION) {
-      oauthStates.delete(state);
-      throw new BadRequestError('OAuth state expired');
-    }
+    const storedState = JSON.parse(storedStateJson) as OAuthState;
 
-    // Remove used state
-    oauthStates.delete(state);
+    // Remove used state immediately
+    await redis.del(`${OAUTH_STATE_PREFIX}${state}`);
 
     const providerInstance = this.getProvider(provider);
 
@@ -93,20 +102,35 @@ export class OAuthService {
    */
   async linkAccount(userId: string, oauthUser: OAuthUser): Promise<LinkedAccount> {
     // Check if already linked
-    const existingLink = await this.findLinkedAccount(
+    const existingLink = await this.repository.findByProviderAccount(
       oauthUser.provider,
       oauthUser.providerAccountId
     );
+
     if (existingLink) {
       if (existingLink.userId !== userId) {
         throw new BadRequestError('This account is already linked to another user');
       }
       // Update existing link
-      return this.updateLinkedAccount(existingLink.id, oauthUser);
+      const updated = await this.repository.update(existingLink.id, {
+        email: oauthUser.email || existingLink.email,
+        name: oauthUser.name || existingLink.name,
+        picture: oauthUser.picture || existingLink.picture,
+        accessToken: oauthUser.accessToken,
+        refreshToken: oauthUser.refreshToken || existingLink.refreshToken,
+        expiresAt: oauthUser.expiresAt ? new Date(oauthUser.expiresAt) : existingLink.expiresAt,
+      });
+
+      if (!updated) {
+        throw new NotFoundError('Linked account');
+      }
+
+      logger.info({ userId, provider: oauthUser.provider }, 'OAuth account updated');
+      return updated;
     }
 
-    const linkedAccount: LinkedAccount = {
-      id: randomUUID(),
+    // Create new linked account
+    const linkedAccount = await this.repository.create({
       userId,
       provider: oauthUser.provider,
       providerAccountId: oauthUser.providerAccountId,
@@ -116,13 +140,9 @@ export class OAuthService {
       accessToken: oauthUser.accessToken,
       refreshToken: oauthUser.refreshToken,
       expiresAt: oauthUser.expiresAt ? new Date(oauthUser.expiresAt) : undefined,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    });
 
-    linkedAccounts.set(linkedAccount.id, linkedAccount);
     logger.info({ userId, provider: oauthUser.provider }, 'OAuth account linked');
-
     return linkedAccount;
   }
 
@@ -130,27 +150,20 @@ export class OAuthService {
    * Unlink an OAuth account from a user
    */
   async unlinkAccount(userId: string, provider: OAuthProvider): Promise<void> {
-    for (const [id, account] of linkedAccounts.entries()) {
-      if (account.userId === userId && account.provider === provider) {
-        linkedAccounts.delete(id);
-        logger.info({ userId, provider }, 'OAuth account unlinked');
-        return;
-      }
+    const deleted = await this.repository.deleteByUserAndProvider(userId, provider);
+
+    if (!deleted) {
+      throw new NotFoundError('Linked account');
     }
-    throw new NotFoundError('Linked account');
+
+    logger.info({ userId, provider }, 'OAuth account unlinked');
   }
 
   /**
    * Get user's linked accounts
    */
   async getUserLinkedAccounts(userId: string): Promise<LinkedAccount[]> {
-    const accounts: LinkedAccount[] = [];
-    for (const account of linkedAccounts.values()) {
-      if (account.userId === userId) {
-        accounts.push(account);
-      }
-    }
-    return accounts;
+    return this.repository.getByUserId(userId);
   }
 
   /**
@@ -160,12 +173,7 @@ export class OAuthService {
     provider: OAuthProvider,
     providerAccountId: string
   ): Promise<LinkedAccount | null> {
-    for (const account of linkedAccounts.values()) {
-      if (account.provider === provider && account.providerAccountId === providerAccountId) {
-        return account;
-      }
-    }
-    return null;
+    return this.repository.findByProviderAccount(provider, providerAccountId);
   }
 
   /**
@@ -175,7 +183,7 @@ export class OAuthService {
     provider: OAuthProvider,
     providerAccountId: string
   ): Promise<string | null> {
-    const account = await this.findLinkedAccount(provider, providerAccountId);
+    const account = await this.repository.findByProviderAccount(provider, providerAccountId);
     return account?.userId || null;
   }
 
@@ -183,7 +191,7 @@ export class OAuthService {
    * Refresh OAuth tokens
    */
   async refreshTokens(linkedAccountId: string): Promise<LinkedAccount> {
-    const account = linkedAccounts.get(linkedAccountId);
+    const account = await this.repository.getById(linkedAccountId);
     if (!account) {
       throw new NotFoundError('Linked account');
     }
@@ -196,15 +204,34 @@ export class OAuthService {
 
     if ('refreshToken' in provider) {
       const tokens = await (provider as GoogleOAuthProvider).refreshToken(account.refreshToken);
-      account.accessToken = tokens.accessToken;
-      account.expiresAt = tokens.expiresIn
-        ? new Date(Date.now() + tokens.expiresIn * 1000)
-        : undefined;
-      account.updatedAt = new Date();
-      linkedAccounts.set(linkedAccountId, account);
+
+      const updated = await this.repository.update(linkedAccountId, {
+        accessToken: tokens.accessToken,
+        expiresAt: tokens.expiresIn ? new Date(Date.now() + tokens.expiresIn * 1000) : undefined,
+      });
+
+      if (!updated) {
+        throw new NotFoundError('Linked account');
+      }
+
+      return updated;
     }
 
     return account;
+  }
+
+  /**
+   * Get linked account by ID
+   */
+  async getLinkedAccount(id: string): Promise<LinkedAccount | null> {
+    return this.repository.getById(id);
+  }
+
+  /**
+   * Delete all linked accounts for a user
+   */
+  async deleteUserAccounts(userId: string): Promise<number> {
+    return this.repository.deleteByUserId(userId);
   }
 
   /**
@@ -247,40 +274,6 @@ export class OAuthService {
         return this.githubProvider;
       default:
         throw new BadRequestError(`Unsupported OAuth provider: ${provider}`);
-    }
-  }
-
-  private async updateLinkedAccount(id: string, oauthUser: OAuthUser): Promise<LinkedAccount> {
-    const account = linkedAccounts.get(id);
-    if (!account) {
-      throw new NotFoundError('Linked account');
-    }
-
-    account.email = oauthUser.email || account.email;
-    account.name = oauthUser.name || account.name;
-    account.picture = oauthUser.picture || account.picture;
-    account.accessToken = oauthUser.accessToken;
-    account.refreshToken = oauthUser.refreshToken || account.refreshToken;
-    account.expiresAt = oauthUser.expiresAt ? new Date(oauthUser.expiresAt) : account.expiresAt;
-    account.updatedAt = new Date();
-
-    linkedAccounts.set(id, account);
-    return account;
-  }
-
-  private cleanupExpiredStates(): void {
-    const now = Date.now();
-    let cleaned = 0;
-
-    for (const [state, data] of oauthStates.entries()) {
-      if (now - data.createdAt > STATE_EXPIRATION) {
-        oauthStates.delete(state);
-        cleaned++;
-      }
-    }
-
-    if (cleaned > 0) {
-      logger.debug({ cleaned }, 'Expired OAuth states cleaned');
     }
   }
 }

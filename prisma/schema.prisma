@@ -375,3 +375,35 @@ enum StorageProvider {
   CLOUDINARY
   GCS
 }
+
+// ==========================================
+// OAUTH LINKED ACCOUNTS
+// ==========================================
+
+model LinkedAccount {
+  id                String        @id @default(uuid())
+  userId            String
+  provider          OAuthProvider
+  providerAccountId String
+  email             String?
+  name              String?
+  picture           String?
+  accessToken       String?
+  refreshToken      String?
+  expiresAt         DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@index([provider])
+  @@map("linked_accounts")
+}
+
+enum OAuthProvider {
+  GOOGLE
+  FACEBOOK
+  GITHUB
+  TWITTER
+  APPLE
+}

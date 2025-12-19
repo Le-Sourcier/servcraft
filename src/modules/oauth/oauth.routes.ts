@@ -92,7 +92,7 @@ export function registerOAuthRoutes(app: FastifyInstance, authService: AuthServi
         });
       }
 
-      const { url, state } = oauthService.getAuthorizationUrl(provider);
+      const { url, state } = await oauthService.getAuthorizationUrl(provider);
 
       // Store redirect URL in cookie if provided
       if (request.query.redirect) {
@@ -321,7 +321,7 @@ export function registerOAuthRoutes(app: FastifyInstance, authService: AuthServi
         });
       }
 
-      const { url, state } = oauthService.getAuthorizationUrl(provider);
+      const { url, state } = await oauthService.getAuthorizationUrl(provider);
 
       // Store user ID in cookie for linking after callback
       reply.setCookie('oauth_link_user', user.id, {
