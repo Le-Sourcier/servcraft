@@ -287,3 +287,59 @@ model PaymentWebhook {
   @@index([createdAt])
   @@map("payment_webhooks")
 }
+
+// ==========================================
+// NOTIFICATIONS
+// ==========================================
+
+model Notification {
+  id        String              @id @default(uuid())
+  userId    String
+  channel   NotificationChannel
+  status    NotificationStatus  @default(PENDING)
+  title     String
+  body      String
+  data      Json?
+  sentAt    DateTime?
+  readAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  @@index([userId])
+  @@index([channel])
+  @@index([status])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+  WEBHOOK
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  READ
+}
+
+model NotificationTemplate {
+  id          String              @id @default(uuid())
+  name        String              @unique
+  channel     NotificationChannel
+  subject     String?
+  body        String
+  variables   Json?
+  metadata    Json?
+  active      Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([name])
+  @@index([channel])
+  @@index([active])
+  @@map("notification_templates")
+}

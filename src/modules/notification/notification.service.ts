@@ -1,6 +1,7 @@
-import { randomUUID } from 'crypto';
 import { logger } from '../../core/logger.js';
 import { BadRequestError } from '../../utils/errors.js';
+import { prisma } from '../../database/prisma.js';
+import { NotificationRepository } from './notification.repository.js';
 import type {
   Notification,
   NotificationConfig,
@@ -12,18 +13,32 @@ import type {
   NotificationTemplate,
 } from './types.js';
 
-// In-memory storage
-const notifications = new Map<string, Notification>();
-const templates = new Map<string, NotificationTemplate>();
-
+/**
+ * Notification Service
+ * Manages multi-channel notifications with Prisma persistence
+ *
+ * Features:
+ * - Multi-channel support (email, SMS, push, webhook, in-app)
+ * - Persistent notification storage in database
+ * - Template system with variable substitution
+ * - Multiple provider support per channel
+ */
 export class NotificationService {
   private config: NotificationConfig;
+  private repository: NotificationRepository;
 
   constructor(config: NotificationConfig = {}) {
     this.config = config;
+    this.repository = new NotificationRepository(prisma);
   }
 
-  // Send notifications
+  // ==========================================
+  // SEND NOTIFICATIONS
+  // ==========================================
+
+  /**
+   * Send a notification through a specific channel
+   */
   async send(
     userId: string,
     channel: NotificationChannel,
@@ -31,16 +46,15 @@ export class NotificationService {
     body: string,
     data?: Record<string, unknown>
   ): Promise<Notification> {
-    const notification: Notification = {
-      id: randomUUID(),
+    // Create notification record
+    const notification = await this.repository.createNotification({
       userId,
       channel,
       status: 'pending',
       title,
       body,
       data,
-      createdAt: new Date(),
-    };
+    });
 
     try {
       switch (channel) {
@@ -57,21 +71,31 @@ export class NotificationService {
           await this.sendWebhook({ url: data?.url as string, body: { title, body, data } });
           break;
         case 'in_app':
-          // Just store the notification
+          // Just stored in database
           break;
       }
 
-      notification.status = 'sent';
-      notification.sentAt = new Date();
-    } catch (error) {
-      notification.status = 'failed';
-      logger.error({ error, notificationId: notification.id }, 'Failed to send notification');
-    }
+      // Update status to sent
+      const updated = await this.repository.updateNotification(notification.id, {
+        status: 'sent',
+        sentAt: new Date(),
+      });
 
-    notifications.set(notification.id, notification);
-    return notification;
+      return updated || notification;
+    } catch (error) {
+      // Update status to failed
+      await this.repository.updateNotification(notification.id, {
+        status: 'failed',
+      });
+
+      logger.error({ error, notificationId: notification.id }, 'Failed to send notification');
+      return { ...notification, status: 'failed' };
+    }
   }
 
+  /**
+   * Send notification to user through multiple channels
+   */
   async sendToUser(
     userId: string,
     channels: NotificationChannel[],
@@ -87,7 +111,10 @@ export class NotificationService {
     return results;
   }
 
-  // Email methods
+  // ==========================================
+  // EMAIL METHODS
+  // ==========================================
+
   async sendEmail(message: EmailMessage): Promise<void> {
     if (!this.config.email) {
       throw new BadRequestError('Email not configured');
@@ -190,7 +217,10 @@ export class NotificationService {
     logger.debug('SMTP email would be sent');
   }
 
-  // SMS methods
+  // ==========================================
+  // SMS METHODS
+  // ==========================================
+
   async sendSMS(message: SMSMessage): Promise<void> {
     if (!this.config.sms) {
       throw new BadRequestError('SMS not configured');
@@ -272,7 +302,10 @@ export class NotificationService {
     });
   }
 
-  // Push notification methods
+  // ==========================================
+  // PUSH NOTIFICATION METHODS
+  // ==========================================
+
   async sendPush(message: PushMessage): Promise<void> {
     if (!this.config.push) {
       throw new BadRequestError('Push notifications not configured');
@@ -318,7 +351,10 @@ export class NotificationService {
     });
   }
 
-  // Webhook methods
+  // ==========================================
+  // WEBHOOK METHODS
+  // ==========================================
+
   async sendWebhook(message: WebhookMessage): Promise<void> {
     const config = this.config.webhook || {};
     const method = message.method || 'POST';
@@ -341,14 +377,31 @@ export class NotificationService {
     logger.info({ url: message.url, method }, 'Webhook sent');
   }
 
-  // Template methods
+  // ==========================================
+  // TEMPLATE METHODS
+  // ==========================================
+
+  /**
+   * Register a notification template
+   */
   async registerTemplate(
     template: Omit<NotificationTemplate, 'id'>
   ): Promise<NotificationTemplate> {
-    const id = randomUUID();
-    const fullTemplate = { ...template, id };
-    templates.set(id, fullTemplate);
-    return fullTemplate;
+    return this.repository.createTemplate(template);
+  }
+
+  /**
+   * Get template by name
+   */
+  async getTemplate(name: string): Promise<NotificationTemplate | null> {
+    return this.repository.getTemplateByName(name);
+  }
+
+  /**
+   * Get all templates
+   */
+  async getAllTemplates(): Promise<NotificationTemplate[]> {
+    return this.repository.getAllTemplates();
   }
 
   private async renderTemplate(message: EmailMessage): Promise<{ text?: string; html?: string }> {
@@ -356,7 +409,7 @@ export class NotificationService {
       return { text: message.text, html: message.html };
     }
 
-    const template = templates.get(message.template);
+    const template = await this.repository.getTemplateByName(message.template);
     if (!template) {
       return { text: message.text, html: message.html };
     }
@@ -369,54 +422,52 @@ export class NotificationService {
     return { html: rendered, text: rendered.replace(/<[^>]*>/g, '') };
   }
 
-  // In-app notification methods
-  async getUserNotifications(userId: string): Promise<Notification[]> {
-    const userNotifications: Notification[] = [];
-    for (const notification of notifications.values()) {
-      if (notification.userId === userId) {
-        userNotifications.push(notification);
-      }
-    }
-    return userNotifications.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  // ==========================================
+  // IN-APP NOTIFICATION METHODS
+  // ==========================================
+
+  /**
+   * Get user's notifications
+   */
+  async getUserNotifications(
+    userId: string,
+    options?: { limit?: number; offset?: number }
+  ): Promise<Notification[]> {
+    return this.repository.getNotificationsByUserId(userId, options);
   }
 
+  /**
+   * Get unread count for user
+   */
   async getUnreadCount(userId: string): Promise<number> {
-    let count = 0;
-    for (const notification of notifications.values()) {
-      if (
-        notification.userId === userId &&
-        notification.channel === 'in_app' &&
-        !notification.readAt
-      ) {
-        count++;
-      }
-    }
-    return count;
+    return this.repository.getUnreadCount(userId);
   }
 
+  /**
+   * Mark notification as read
+   */
   async markAsRead(notificationId: string): Promise<Notification | null> {
-    const notification = notifications.get(notificationId);
-    if (!notification) return null;
-
-    notification.readAt = new Date();
-    notification.status = 'read';
-    notifications.set(notificationId, notification);
-    return notification;
+    return this.repository.markAsRead(notificationId);
   }
 
+  /**
+   * Mark all notifications as read for user
+   */
   async markAllAsRead(userId: string): Promise<number> {
-    let count = 0;
-    for (const notification of notifications.values()) {
-      if (notification.userId === userId && !notification.readAt) {
-        notification.readAt = new Date();
-        notification.status = 'read';
-        count++;
-      }
-    }
-    return count;
+    return this.repository.markAllAsRead(userId);
+  }
+
+  /**
+   * Delete old notifications (cleanup)
+   */
+  async cleanupOldNotifications(olderThanDays: number = 30): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+    return this.repository.deleteOldNotifications(cutoffDate);
   }
 }
 
+// Singleton instance
 let notificationService: NotificationService | null = null;
 
 export function getNotificationService(): NotificationService {
