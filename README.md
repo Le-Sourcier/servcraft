@@ -80,6 +80,7 @@ All services are available as importable modules in your code:
 | **Notifications** | `import { NotificationService } from './modules/notification'` | Send notifications |
 | **Search** | `import { SearchService, ElasticsearchAdapter } from './modules/search'` | Full-text search with Elasticsearch/Meilisearch |
 | **i18n** | `import { I18nService, createI18nMiddleware } from './modules/i18n'` | Multi-language support & localization |
+| **Feature Flags** | `import { FeatureFlagService, createFeatureFlagRoutes } from './modules/feature-flag'` | A/B testing & progressive rollout |
 
 ### Common Integration Patterns
 
@@ -244,6 +245,7 @@ servcraft add queue             # Background jobs & queues
 servcraft add websocket         # Real-time with Socket.io
 servcraft add search            # Elasticsearch/Meilisearch search
 servcraft add i18n              # Multi-language support
+servcraft add feature-flag      # Feature flags & A/B testing
 servcraft add --list            # Show all modules
 ```
 
@@ -1215,6 +1217,7 @@ ServCraft includes these pre-built modules:
 - ✅ **Websockets/Real-time** - Chat, presence, notifications, live events
 - ✅ **Search** - Elasticsearch/Meilisearch full-text search
 - ✅ **i18n/Localization** - Multi-language support with 7+ locales
+- ✅ **Feature Flags** - A/B testing, progressive rollout, user targeting
 - ✅ **File Upload** - Multi-provider support (local, S3, etc.)
 - ✅ **MFA/TOTP** - Two-factor authentication with QR codes
 - ✅ **OAuth** - Google, GitHub, Facebook, Twitter, Apple
@@ -1222,8 +1225,7 @@ ServCraft includes these pre-built modules:
 - ✅ **Notifications** - Email, SMS, Push notifications
 
 ### Coming Soon
-- ⏳ **Feature Flags** - A/B testing, progressive rollout
-- ⏳ **Analytics/Metrics** - Prometheus, custom metrics
+- ⏳ **Analytics/Metrics** - Prometheus, custom metrics, dashboards
 - ⏳ **Media Processing** - Image/video processing with FFmpeg
 - ⏳ **API Versioning** - Multiple API versions support
 
