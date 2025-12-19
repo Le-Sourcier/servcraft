@@ -207,7 +207,7 @@ export class UploadService {
         'Content-Length': buffer.length.toString(),
         'x-amz-acl': isPublic ? 'public-read' : 'private',
       },
-      body: buffer,
+      body: new Uint8Array(buffer),
     });
 
     if (!response.ok) {
@@ -252,7 +252,7 @@ export class UploadService {
     const uploadFolder = config.folder ? `${config.folder}/${folder}` : folder;
 
     const formData = new FormData();
-    formData.append('file', new Blob([buffer], { type: file.mimetype }));
+    formData.append('file', new Blob([new Uint8Array(buffer)], { type: file.mimetype }));
     formData.append('api_key', config.apiKey);
     formData.append('folder', uploadFolder);
     formData.append('public_id', path.parse(filename).name);
@@ -310,7 +310,7 @@ export class UploadService {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': file.mimetype },
-      body: buffer,
+      body: new Uint8Array(buffer),
     });
 
     if (!response.ok) {

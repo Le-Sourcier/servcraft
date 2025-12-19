@@ -34,7 +34,13 @@ export function createVersioningRoutes(versioningService: VersioningService): Ro
    * GET /versions/:version
    */
   router.get('/versions/:version', (req: Request, res: Response) => {
-    const version = versioningService.getVersion(req.params.version);
+    const versionParam = req.params.version;
+    if (!versionParam) {
+      res.status(400).json({ error: 'Version parameter required' });
+      return;
+    }
+
+    const version = versioningService.getVersion(versionParam);
 
     if (!version) {
       res.status(404).json({ error: 'Version not found' });

@@ -150,7 +150,7 @@ export class EnvManager {
 
       // Extract key from KEY=value or # KEY=value
       const match = trimmed.match(/^#?\s*([A-Z_][A-Z0-9_]*)\s*=/);
-      if (match) {
+      if (match && match[1]) {
         keys.add(match[1]);
       }
     }

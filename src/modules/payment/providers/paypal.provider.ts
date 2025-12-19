@@ -12,7 +12,7 @@ export class PayPalProvider {
 
   constructor(config: PayPalConfig) {
     this.config = config;
-    logger.info('PayPal provider initialized', { sandbox: config.sandbox });
+    logger.info({ sandbox: config.sandbox }, 'PayPal provider initialized');
   }
 
   private get baseUrl(): string {

@@ -228,10 +228,10 @@ export class I18nService {
 
     // Handle nested keys (e.g., "user.profile.title")
     const keys = key.split('.');
-    let value: string | TranslationData = translations;
+    let value: string | TranslationData | undefined = translations;
 
     for (const k of keys) {
-      if (typeof value === 'object' && k in value) {
+      if (value && typeof value === 'object' && k in value) {
         value = value[k];
       } else {
         return null;
@@ -253,7 +253,7 @@ export class I18nService {
     // Or object syntax with keys: zero, one, other
     if (typeof translation === 'object') {
       const pluralObj = translation as unknown as Record<string, string>;
-      return pluralObj[rule] || pluralObj.other || translation.toString();
+      return pluralObj[rule] || pluralObj['other'] || String(translation);
     }
 
     // Simple {s} syntax

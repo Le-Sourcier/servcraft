@@ -15,7 +15,7 @@ export class MobileMoneyProvider {
 
   constructor(config: MobileMoneyConfig) {
     this.config = config;
-    logger.info('Mobile Money provider initialized', { provider: config.provider });
+    logger.info({ provider: config.provider }, 'Mobile Money provider initialized');
   }
 
   private get baseUrl(): string {

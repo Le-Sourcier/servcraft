@@ -48,7 +48,12 @@ export function createFeatureFlagRoutes(flagService: FeatureFlagService): Router
    */
   router.get('/:key', async (req: Request, res: Response) => {
     try {
-      const flag = await flagService.getFlag(req.params.key);
+      const key = req.params.key;
+      if (!key) {
+        res.status(400).json({ error: 'Key parameter required' });
+        return;
+      }
+      const flag = await flagService.getFlag(key);
       res.json(flag);
     } catch (error) {
       res.status(404).json({ error: error instanceof Error ? error.message : 'Flag not found' });
@@ -61,7 +66,12 @@ export function createFeatureFlagRoutes(flagService: FeatureFlagService): Router
    */
   router.patch('/:key', async (req: Request, res: Response) => {
     try {
-      const flag = await flagService.updateFlag(req.params.key, req.body);
+      const key = req.params.key;
+      if (!key) {
+        res.status(400).json({ error: 'Key parameter required' });
+        return;
+      }
+      const flag = await flagService.updateFlag(key, req.body);
       res.json(flag);
     } catch (error) {
       res
@@ -76,7 +86,12 @@ export function createFeatureFlagRoutes(flagService: FeatureFlagService): Router
    */
   router.delete('/:key', async (req: Request, res: Response) => {
     try {
-      await flagService.deleteFlag(req.params.key);
+      const key = req.params.key;
+      if (!key) {
+        res.status(400).json({ error: 'Key parameter required' });
+        return;
+      }
+      await flagService.deleteFlag(key);
       res.json({ success: true, message: 'Flag deleted' });
     } catch (error) {
       res.status(404).json({ error: error instanceof Error ? error.message : 'Flag not found' });
@@ -90,8 +105,13 @@ export function createFeatureFlagRoutes(flagService: FeatureFlagService): Router
    */
   router.post('/:key/evaluate', async (req: Request, res: Response) => {
     try {
+      const key = req.params.key;
+      if (!key) {
+        res.status(400).json({ error: 'Key parameter required' });
+        return;
+      }
       const context: FlagEvaluationContext = req.body;
-      const result = await flagService.evaluateFlag(req.params.key, context);
+      const result = await flagService.evaluateFlag(key, context);
       res.json(result);
     } catch (error) {
       res.status(404).json({ error: error instanceof Error ? error.message : 'Flag not found' });
@@ -122,8 +142,13 @@ export function createFeatureFlagRoutes(flagService: FeatureFlagService): Router
    */
   router.post('/:key/enabled', async (req: Request, res: Response) => {
     try {
+      const key = req.params.key;
+      if (!key) {
+        res.status(400).json({ error: 'Key parameter required' });
+        return;
+      }
       const context: FlagEvaluationContext = req.body;
-      const enabled = await flagService.isEnabled(req.params.key, context);
+      const enabled = await flagService.isEnabled(key, context);
       res.json({ enabled });
     } catch (error) {
       res.status(404).json({ error: error instanceof Error ? error.message : 'Flag not found' });
@@ -137,6 +162,11 @@ export function createFeatureFlagRoutes(flagService: FeatureFlagService): Router
    */
   router.post('/:key/override', async (req: Request, res: Response) => {
     try {
+      const key = req.params.key;
+      if (!key) {
+        res.status(400).json({ error: 'Key parameter required' });
+        return;
+      }
       const { targetId, targetType, enabled, expiresAt } = req.body as {
         targetId: string;
         targetType: 'user' | 'session';
@@ -150,7 +180,7 @@ export function createFeatureFlagRoutes(flagService: FeatureFlagService): Router
       }
 
       await flagService.setOverride(
-        req.params.key,
+        key,
         targetId,
         targetType,
         enabled,
@@ -170,7 +200,13 @@ export function createFeatureFlagRoutes(flagService: FeatureFlagService): Router
    * DELETE /flags/:key/override/:targetId
    */
   router.delete('/:key/override/:targetId', async (req: Request, res: Response) => {
-    await flagService.removeOverride(req.params.key, req.params.targetId);
+    const key = req.params.key;
+    const targetId = req.params.targetId;
+    if (!key || !targetId) {
+      res.status(400).json({ error: 'Key and targetId parameters required' });
+      return;
+    }
+    await flagService.removeOverride(key, targetId);
     res.json({ success: true, message: 'Override removed' });
   });
 
@@ -180,7 +216,12 @@ export function createFeatureFlagRoutes(flagService: FeatureFlagService): Router
    */
   router.get('/:key/stats', async (req: Request, res: Response) => {
     try {
-      const stats = await flagService.getStats(req.params.key);
+      const key = req.params.key;
+      if (!key) {
+        res.status(400).json({ error: 'Key parameter required' });
+        return;
+      }
+      const stats = await flagService.getStats(key);
       res.json(stats);
     } catch (error) {
       res.status(404).json({ error: error instanceof Error ? error.message : 'Stats not found' });
@@ -192,8 +233,13 @@ export function createFeatureFlagRoutes(flagService: FeatureFlagService): Router
    * GET /flags/:key/events?limit=100
    */
   router.get('/:key/events', async (req: Request, res: Response) => {
+    const key = req.params.key;
+    if (!key) {
+      res.status(400).json({ error: 'Key parameter required' });
+      return;
+    }
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
-    const events = await flagService.getEvents(req.params.key, limit);
+    const events = await flagService.getEvents(key, limit);
     res.json({ events, count: events.length });
   });
 

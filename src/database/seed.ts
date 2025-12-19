@@ -26,7 +26,12 @@ async function main(): Promise<void> {
   // Create default settings
   const defaultSettings = [
     { key: 'app.name', value: 'Servcraft', type: 'string', group: 'general' },
-    { key: 'app.description', value: 'A modular Node.js backend framework', type: 'string', group: 'general' },
+    {
+      key: 'app.description',
+      value: 'A modular Node.js backend framework',
+      type: 'string',
+      group: 'general',
+    },
     { key: 'auth.registration_enabled', value: true, type: 'boolean', group: 'auth' },
     { key: 'auth.email_verification_required', value: false, type: 'boolean', group: 'auth' },
     { key: 'email.enabled', value: false, type: 'boolean', group: 'email' },

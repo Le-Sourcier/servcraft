@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import { config } from '../../config/index.js';
 import { logger } from '../../core/logger.js';
-import { renderTemplate, renderCustomTemplate } from './templates.js';
+import { renderTemplate } from './templates.js';
 import type { EmailOptions, EmailResult, EmailConfig, TemplateData } from './types.js';
 
 export class EmailService {
@@ -73,10 +73,7 @@ export class EmailService {
 
       const result = await this.transporter.sendMail(mailOptions);
 
-      logger.info(
-        { messageId: result.messageId, to: options.to },
-        'Email sent successfully'
-      );
+      logger.info({ messageId: result.messageId, to: options.to }, 'Email sent successfully');
 
       return {
         success: true,
@@ -93,11 +90,7 @@ export class EmailService {
     }
   }
 
-  async sendTemplate(
-    to: string,
-    template: string,
-    data: TemplateData
-  ): Promise<EmailResult> {
+  async sendTemplate(to: string, template: string, data: TemplateData): Promise<EmailResult> {
     const subjects: Record<string, string> = {
       welcome: `Welcome to ${data.appName || 'Servcraft'}!`,
       'verify-email': 'Verify Your Email',

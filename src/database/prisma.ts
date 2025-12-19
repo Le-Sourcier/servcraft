@@ -3,15 +3,12 @@ import { logger } from '../core/logger.js';
 import { isProduction } from '../config/index.js';
 
 declare global {
-  // eslint-disable-next-line no-var
   var __prisma: PrismaClient | undefined;
 }
 
 const prismaClientSingleton = (): PrismaClient => {
   return new PrismaClient({
-    log: isProduction()
-      ? ['error']
-      : ['query', 'info', 'warn', 'error'],
+    log: isProduction() ? ['error'] : ['query', 'info', 'warn', 'error'],
     errorFormat: isProduction() ? 'minimal' : 'pretty',
   });
 };

@@ -1,9 +1,25 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { Readable } from 'stream';
 import type { AuthService } from '../auth/auth.service.js';
 import { createAuthMiddleware } from '../auth/auth.middleware.js';
 import { commonResponses, idParam } from '../swagger/index.js';
 import { getUploadService } from './upload.service.js';
 import type { MultipartFile, ImageTransformOptions } from './types.js';
+
+// Extend FastifyRequest for multipart support
+interface MultipartData {
+  filename: string;
+  mimetype: string;
+  encoding: string;
+  file: Readable;
+  fields: Record<string, { value?: string }>;
+  toBuffer: () => Promise<Buffer>;
+}
+
+interface MultipartRequest extends FastifyRequest {
+  file: () => Promise<MultipartData | undefined>;
+  files: () => AsyncIterableIterator<MultipartData>;
+}
 
 const uploadTag = 'Uploads';
 
@@ -58,7 +74,8 @@ export function registerUploadRoutes(app: FastifyInstance, authService: AuthServ
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const data = await request.file();
+      const multipartRequest = request as MultipartRequest;
+      const data = await multipartRequest.file();
       if (!data) {
         return reply.status(400).send({ success: false, message: 'No file provided' });
       }
@@ -112,7 +129,8 @@ export function registerUploadRoutes(app: FastifyInstance, authService: AuthServ
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const parts = request.files();
+      const multipartRequest = request as MultipartRequest;
+      const parts = multipartRequest.files();
       const uploadedFiles: MultipartFile[] = [];
 
       for await (const part of parts) {
@@ -165,7 +183,8 @@ export function registerUploadRoutes(app: FastifyInstance, authService: AuthServ
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const data = await request.file();
+      const multipartRequest = request as MultipartRequest;
+      const data = await multipartRequest.file();
       if (!data) {
         return reply.status(400).send({ success: false, message: 'No file provided' });
       }
@@ -199,7 +218,7 @@ export function registerUploadRoutes(app: FastifyInstance, authService: AuthServ
   );
 
   // Get file info
-  app.get(
+  app.get<{ Params: { id: string } }>(
     '/files/:id',
     {
       preHandler: [authenticate],
@@ -215,7 +234,7 @@ export function registerUploadRoutes(app: FastifyInstance, authService: AuthServ
         },
       },
     },
-    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    async (request, reply) => {
       const file = await uploadService.getFile(request.params.id);
       if (!file) {
         return reply.status(404).send({ success: false, message: 'File not found' });
@@ -225,7 +244,7 @@ export function registerUploadRoutes(app: FastifyInstance, authService: AuthServ
   );
 
   // Get signed URL for private files
-  app.get(
+  app.get<{ Params: { id: string }; Querystring: { expiresIn?: number } }>(
     '/files/:id/signed-url',
     {
       preHandler: [authenticate],
@@ -259,10 +278,7 @@ export function registerUploadRoutes(app: FastifyInstance, authService: AuthServ
         },
       },
     },
-    async (
-      request: FastifyRequest<{ Params: { id: string }; Querystring: { expiresIn?: number } }>,
-      reply: FastifyReply
-    ) => {
+    async (request, reply) => {
       const expiresIn = request.query.expiresIn || 3600;
       const url = await uploadService.getSignedUrl(request.params.id, expiresIn);
       const expiresAt = new Date(Date.now() + expiresIn * 1000);
@@ -271,7 +287,7 @@ export function registerUploadRoutes(app: FastifyInstance, authService: AuthServ
   );
 
   // Delete file
-  app.delete(
+  app.delete<{ Params: { id: string } }>(
     '/files/:id',
     {
       preHandler: [authenticate],
@@ -287,7 +303,7 @@ export function registerUploadRoutes(app: FastifyInstance, authService: AuthServ
         },
       },
     },
-    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    async (request, reply) => {
       await uploadService.deleteFile(request.params.id);
       return reply.status(204).send();
     }

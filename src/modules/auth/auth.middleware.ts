@@ -4,10 +4,7 @@ import type { AuthService } from './auth.service.js';
 import type { AuthUser } from './types.js';
 
 export function createAuthMiddleware(authService: AuthService) {
-  return async function authenticate(
-    request: FastifyRequest,
-    reply: FastifyReply
-  ): Promise<void> {
+  return async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
     const authHeader = request.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -26,10 +23,7 @@ export function createAuthMiddleware(authService: AuthService) {
 }
 
 export function createRoleMiddleware(allowedRoles: string[]) {
-  return async function authorize(
-    request: FastifyRequest,
-    _reply: FastifyReply
-  ): Promise<void> {
+  return async function authorize(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
     const user = request.user as AuthUser | undefined;
 
     if (!user) {
@@ -42,7 +36,7 @@ export function createRoleMiddleware(allowedRoles: string[]) {
   };
 }
 
-export function createPermissionMiddleware(requiredPermissions: string[]) {
+export function createPermissionMiddleware(_requiredPermissions: string[]) {
   return async function checkPermissions(
     request: FastifyRequest,
     _reply: FastifyReply

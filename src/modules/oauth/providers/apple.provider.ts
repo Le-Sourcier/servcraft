@@ -150,7 +150,7 @@ export class AppleOAuthProvider {
 
     // Decode ID token (in production, verify signature with Apple's public keys)
     const [, payloadB64] = idToken.split('.');
-    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as AppleIdToken;
+    const payload = JSON.parse(Buffer.from(payloadB64 ?? '', 'base64').toString()) as AppleIdToken;
 
     // Apple only sends user info on first authorization
     // After that, you must store it yourself

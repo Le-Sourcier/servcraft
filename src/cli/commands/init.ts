@@ -5,12 +5,13 @@ import ora from 'ora';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { execSync } from 'child_process';
-import { ensureDir, writeFile, success, error, info, warn } from '../utils/helpers.js';
+import { ensureDir, writeFile, error, warn } from '../utils/helpers.js';
 
 interface InitOptions {
   name: string;
   language: 'typescript' | 'javascript';
   database: 'postgresql' | 'mysql' | 'sqlite' | 'mongodb' | 'none';
+  orm: 'prisma' | 'mongoose' | 'none';
   validator: 'zod' | 'joi' | 'yup';
   features: string[];
 }
@@ -23,195 +24,223 @@ export const initCommand = new Command('init')
   .option('--ts, --typescript', 'Use TypeScript (default)')
   .option('--js, --javascript', 'Use JavaScript')
   .option('--db <database>', 'Database type (postgresql, mysql, sqlite, mongodb, none)')
-  .action(async (name?: string, cmdOptions?: { yes?: boolean; typescript?: boolean; javascript?: boolean; db?: string }) => {
-    console.log(chalk.blue(`
+  .action(
+    async (
+      name?: string,
+      cmdOptions?: { yes?: boolean; typescript?: boolean; javascript?: boolean; db?: string }
+    ) => {
+      console.log(
+        chalk.blue(`
 ╔═══════════════════════════════════════════╗
 ║                                           ║
 ║   ${chalk.bold('🚀 Servcraft Project Generator')}          ║
 ║                                           ║
 ╚═══════════════════════════════════════════╝
-`));
+`)
+      );
 
-    let options: InitOptions;
+      let options: InitOptions;
 
-    if (cmdOptions?.yes) {
-      options = {
-        name: name || 'my-servcraft-app',
-        language: cmdOptions.javascript ? 'javascript' : 'typescript',
-        database: (cmdOptions.db as InitOptions['database']) || 'postgresql',
-        validator: 'zod',
-        features: ['auth', 'users', 'email'],
-      };
-    } else {
-      const answers = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'name',
-          message: 'Project name:',
-          default: name || 'my-servcraft-app',
-          validate: (input: string) => {
-            if (!/^[a-z0-9-_]+$/i.test(input)) {
-              return 'Project name can only contain letters, numbers, hyphens, and underscores';
-            }
-            return true;
-          },
-        },
-        {
-          type: 'list',
-          name: 'language',
-          message: 'Select language:',
-          choices: [
-            { name: 'TypeScript (Recommended)', value: 'typescript' },
-            { name: 'JavaScript', value: 'javascript' },
-          ],
-          default: 'typescript',
-        },
-        {
-          type: 'list',
-          name: 'database',
-          message: 'Select database:',
-          choices: [
-            { name: 'PostgreSQL (Recommended)', value: 'postgresql' },
-            { name: 'MySQL', value: 'mysql' },
-            { name: 'SQLite (Development)', value: 'sqlite' },
-            { name: 'MongoDB', value: 'mongodb' },
-            { name: 'None (Add later)', value: 'none' },
-          ],
-          default: 'postgresql',
-        },
-        {
-          type: 'list',
-          name: 'validator',
-          message: 'Select validation library:',
-          choices: [
-            { name: 'Zod (Recommended - TypeScript-first)', value: 'zod' },
-            { name: 'Joi (Battle-tested, feature-rich)', value: 'joi' },
-            { name: 'Yup (Inspired by Joi, lighter)', value: 'yup' },
-          ],
-          default: 'zod',
-        },
-        {
-          type: 'checkbox',
-          name: 'features',
-          message: 'Select features to include:',
-          choices: [
-            { name: 'Authentication (JWT)', value: 'auth', checked: true },
-            { name: 'User Management', value: 'users', checked: true },
-            { name: 'Email Service', value: 'email', checked: true },
-            { name: 'Audit Logs', value: 'audit', checked: false },
-            { name: 'File Upload', value: 'upload', checked: false },
-            { name: 'Redis Cache', value: 'redis', checked: false },
-          ],
-        },
-      ]);
-
-      options = answers as InitOptions;
-    }
-
-    const projectDir = path.resolve(process.cwd(), options.name);
-    const spinner = ora('Creating project...').start();
-
-    try {
-      // Check if directory exists
-      try {
-        await fs.access(projectDir);
-        spinner.stop();
-        error(`Directory "${options.name}" already exists`);
-        return;
-      } catch {
-        // Directory doesn't exist, continue
-      }
-
-      // Create project directory
-      await ensureDir(projectDir);
-
-      spinner.text = 'Generating project files...';
-
-      // Generate package.json
-      const packageJson = generatePackageJson(options);
-      await writeFile(path.join(projectDir, 'package.json'), JSON.stringify(packageJson, null, 2));
-
-      // Generate tsconfig or jsconfig
-      if (options.language === 'typescript') {
-        await writeFile(path.join(projectDir, 'tsconfig.json'), generateTsConfig());
-        await writeFile(path.join(projectDir, 'tsup.config.ts'), generateTsupConfig());
+      if (cmdOptions?.yes) {
+        const db = (cmdOptions.db as InitOptions['database']) || 'postgresql';
+        options = {
+          name: name || 'my-servcraft-app',
+          language: cmdOptions.javascript ? 'javascript' : 'typescript',
+          database: db,
+          orm: db === 'mongodb' ? 'mongoose' : db === 'none' ? 'none' : 'prisma',
+          validator: 'zod',
+          features: ['auth', 'users', 'email'],
+        };
       } else {
-        await writeFile(path.join(projectDir, 'jsconfig.json'), generateJsConfig());
+        const answers = await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'name',
+            message: 'Project name:',
+            default: name || 'my-servcraft-app',
+            validate: (input: string) => {
+              if (!/^[a-z0-9-_]+$/i.test(input)) {
+                return 'Project name can only contain letters, numbers, hyphens, and underscores';
+              }
+              return true;
+            },
+          },
+          {
+            type: 'list',
+            name: 'language',
+            message: 'Select language:',
+            choices: [
+              { name: 'TypeScript (Recommended)', value: 'typescript' },
+              { name: 'JavaScript', value: 'javascript' },
+            ],
+            default: 'typescript',
+          },
+          {
+            type: 'list',
+            name: 'database',
+            message: 'Select database:',
+            choices: [
+              { name: 'PostgreSQL (Recommended)', value: 'postgresql' },
+              { name: 'MySQL', value: 'mysql' },
+              { name: 'SQLite (Development)', value: 'sqlite' },
+              { name: 'MongoDB (with Mongoose)', value: 'mongodb' },
+              { name: 'None (Add later)', value: 'none' },
+            ],
+            default: 'postgresql',
+          },
+          {
+            type: 'list',
+            name: 'validator',
+            message: 'Select validation library:',
+            choices: [
+              { name: 'Zod (Recommended - TypeScript-first)', value: 'zod' },
+              { name: 'Joi (Battle-tested, feature-rich)', value: 'joi' },
+              { name: 'Yup (Inspired by Joi, lighter)', value: 'yup' },
+            ],
+            default: 'zod',
+          },
+          {
+            type: 'checkbox',
+            name: 'features',
+            message: 'Select features to include:',
+            choices: [
+              { name: 'Authentication (JWT)', value: 'auth', checked: true },
+              { name: 'User Management', value: 'users', checked: true },
+              { name: 'Email Service', value: 'email', checked: true },
+              { name: 'Audit Logs', value: 'audit', checked: false },
+              { name: 'File Upload', value: 'upload', checked: false },
+              { name: 'Redis Cache', value: 'redis', checked: false },
+            ],
+          },
+        ]);
+
+        // Auto-determine ORM based on database choice
+        const db = answers.database as InitOptions['database'];
+        options = {
+          ...answers,
+          orm: db === 'mongodb' ? 'mongoose' : db === 'none' ? 'none' : 'prisma',
+        } as InitOptions;
       }
 
-      // Generate .env files
-      await writeFile(path.join(projectDir, '.env.example'), generateEnvExample(options));
-      await writeFile(path.join(projectDir, '.env'), generateEnvExample(options));
-
-      // Generate .gitignore
-      await writeFile(path.join(projectDir, '.gitignore'), generateGitignore());
-
-      // Generate Docker files
-      await writeFile(path.join(projectDir, 'Dockerfile'), generateDockerfile(options));
-      await writeFile(path.join(projectDir, 'docker-compose.yml'), generateDockerCompose(options));
-
-      // Create directory structure
-      const ext = options.language === 'typescript' ? 'ts' : 'js';
-      const dirs = [
-        'src/core',
-        'src/config',
-        'src/modules',
-        'src/middleware',
-        'src/utils',
-        'src/types',
-        'tests/unit',
-        'tests/integration',
-      ];
-
-      if (options.database !== 'none' && options.database !== 'mongodb') {
-        dirs.push('prisma');
-      }
-
-      for (const dir of dirs) {
-        await ensureDir(path.join(projectDir, dir));
-      }
-
-      // Generate main entry file
-      await writeFile(
-        path.join(projectDir, `src/index.${ext}`),
-        generateEntryFile(options)
-      );
-
-      // Generate core files
-      await writeFile(
-        path.join(projectDir, `src/core/server.${ext}`),
-        generateServerFile(options)
-      );
-      await writeFile(
-        path.join(projectDir, `src/core/logger.${ext}`),
-        generateLoggerFile(options)
-      );
-
-      // Generate Prisma schema if database is selected
-      if (options.database !== 'none' && options.database !== 'mongodb') {
-        await writeFile(
-          path.join(projectDir, 'prisma/schema.prisma'),
-          generatePrismaSchema(options)
-        );
-      }
-
-      spinner.succeed('Project files generated!');
-
-      // Install dependencies
-      const installSpinner = ora('Installing dependencies...').start();
+      const projectDir = path.resolve(process.cwd(), options.name);
+      const spinner = ora('Creating project...').start();
 
       try {
-        execSync('npm install', { cwd: projectDir, stdio: 'pipe' });
-        installSpinner.succeed('Dependencies installed!');
-      } catch {
-        installSpinner.warn('Failed to install dependencies automatically');
-        warn('  Run "npm install" manually in the project directory');
-      }
+        // Check if directory exists
+        try {
+          await fs.access(projectDir);
+          spinner.stop();
+          error(`Directory "${options.name}" already exists`);
+          return;
+        } catch {
+          // Directory doesn't exist, continue
+        }
 
-      // Print success message
-      console.log('\n' + chalk.green('✨ Project created successfully!'));
-      console.log('\n' + chalk.bold('📁 Project structure:'));
-      console.log(`
+        // Create project directory
+        await ensureDir(projectDir);
+
+        spinner.text = 'Generating project files...';
+
+        // Generate package.json
+        const packageJson = generatePackageJson(options);
+        await writeFile(
+          path.join(projectDir, 'package.json'),
+          JSON.stringify(packageJson, null, 2)
+        );
+
+        // Generate tsconfig or jsconfig
+        if (options.language === 'typescript') {
+          await writeFile(path.join(projectDir, 'tsconfig.json'), generateTsConfig());
+          await writeFile(path.join(projectDir, 'tsup.config.ts'), generateTsupConfig());
+        } else {
+          await writeFile(path.join(projectDir, 'jsconfig.json'), generateJsConfig());
+        }
+
+        // Generate .env files
+        await writeFile(path.join(projectDir, '.env.example'), generateEnvExample(options));
+        await writeFile(path.join(projectDir, '.env'), generateEnvExample(options));
+
+        // Generate .gitignore
+        await writeFile(path.join(projectDir, '.gitignore'), generateGitignore());
+
+        // Generate Docker files
+        await writeFile(path.join(projectDir, 'Dockerfile'), generateDockerfile(options));
+        await writeFile(
+          path.join(projectDir, 'docker-compose.yml'),
+          generateDockerCompose(options)
+        );
+
+        // Create directory structure
+        const ext = options.language === 'typescript' ? 'ts' : 'js';
+        const dirs = [
+          'src/core',
+          'src/config',
+          'src/modules',
+          'src/middleware',
+          'src/utils',
+          'src/types',
+          'tests/unit',
+          'tests/integration',
+        ];
+
+        if (options.orm === 'prisma') {
+          dirs.push('prisma');
+        }
+        if (options.orm === 'mongoose') {
+          dirs.push('src/database/models');
+        }
+
+        for (const dir of dirs) {
+          await ensureDir(path.join(projectDir, dir));
+        }
+
+        // Generate main entry file
+        await writeFile(path.join(projectDir, `src/index.${ext}`), generateEntryFile(options));
+
+        // Generate core files
+        await writeFile(
+          path.join(projectDir, `src/core/server.${ext}`),
+          generateServerFile(options)
+        );
+        await writeFile(
+          path.join(projectDir, `src/core/logger.${ext}`),
+          generateLoggerFile(options)
+        );
+
+        // Generate database files based on ORM choice
+        if (options.orm === 'prisma') {
+          await writeFile(
+            path.join(projectDir, 'prisma/schema.prisma'),
+            generatePrismaSchema(options)
+          );
+        } else if (options.orm === 'mongoose') {
+          await writeFile(
+            path.join(projectDir, `src/database/connection.${ext}`),
+            generateMongooseConnection(options)
+          );
+          await writeFile(
+            path.join(projectDir, `src/database/models/user.model.${ext}`),
+            generateMongooseUserModel(options)
+          );
+        }
+
+        spinner.succeed('Project files generated!');
+
+        // Install dependencies
+        const installSpinner = ora('Installing dependencies...').start();
+
+        try {
+          execSync('npm install', { cwd: projectDir, stdio: 'pipe' });
+          installSpinner.succeed('Dependencies installed!');
+        } catch {
+          installSpinner.warn('Failed to install dependencies automatically');
+          warn('  Run "npm install" manually in the project directory');
+        }
+
+        // Print success message
+        console.log('\n' + chalk.green('✨ Project created successfully!'));
+        console.log('\n' + chalk.bold('📁 Project structure:'));
+        console.log(`
   ${options.name}/
   ├── src/
   │   ├── core/           # Core server, logger
@@ -226,26 +255,26 @@ export const initCommand = new Command('init')
   └── package.json
 `);
 
-      console.log(chalk.bold('🚀 Get started:'));
-      console.log(`
+        console.log(chalk.bold('🚀 Get started:'));
+        console.log(`
   ${chalk.cyan(`cd ${options.name}`)}
   ${options.database !== 'none' ? chalk.cyan('npm run db:push        # Setup database') : ''}
   ${chalk.cyan('npm run dev            # Start development server')}
 `);
 
-      console.log(chalk.bold('📚 Available commands:'));
-      console.log(`
+        console.log(chalk.bold('📚 Available commands:'));
+        console.log(`
   ${chalk.yellow('servcraft generate module <name>')}    Generate a new module
   ${chalk.yellow('servcraft generate controller <name>')} Generate a controller
   ${chalk.yellow('servcraft generate service <name>')}    Generate a service
   ${chalk.yellow('servcraft add auth')}                   Add authentication module
 `);
-
-    } catch (err) {
-      spinner.fail('Failed to create project');
-      error(err instanceof Error ? err.message : String(err));
+      } catch (err) {
+        spinner.fail('Failed to create project');
+        error(err instanceof Error ? err.message : String(err));
+      }
     }
-  });
+  );
 
 function generatePackageJson(options: InitOptions): Record<string, unknown> {
   const isTS = options.language === 'typescript';
@@ -301,7 +330,7 @@ function generatePackageJson(options: InitOptions): Record<string, unknown> {
     (pkg.devDependencies as Record<string, string>)['@types/bcryptjs'] = '^2.4.6';
   }
 
-  if (options.database !== 'none' && options.database !== 'mongodb') {
+  if (options.orm === 'prisma') {
     (pkg.dependencies as Record<string, string>)['@prisma/client'] = '^5.22.0';
     (pkg.devDependencies as Record<string, string>).prisma = '^5.22.0';
     (pkg.scripts as Record<string, string>)['db:generate'] = 'prisma generate';
@@ -310,8 +339,11 @@ function generatePackageJson(options: InitOptions): Record<string, unknown> {
     (pkg.scripts as Record<string, string>)['db:studio'] = 'prisma studio';
   }
 
-  if (options.database === 'mongodb') {
+  if (options.orm === 'mongoose') {
     (pkg.dependencies as Record<string, string>).mongoose = '^8.8.4';
+    if (isTS) {
+      (pkg.devDependencies as Record<string, string>)['@types/mongoose'] = '^5.11.97';
+    }
   }
 
   if (options.features.includes('email')) {
@@ -330,38 +362,46 @@ function generatePackageJson(options: InitOptions): Record<string, unknown> {
 }
 
 function generateTsConfig(): string {
-  return JSON.stringify({
-    compilerOptions: {
-      target: 'ES2022',
-      module: 'NodeNext',
-      moduleResolution: 'NodeNext',
-      lib: ['ES2022'],
-      outDir: './dist',
-      rootDir: './src',
-      strict: true,
-      esModuleInterop: true,
-      skipLibCheck: true,
-      forceConsistentCasingInFileNames: true,
-      resolveJsonModule: true,
-      declaration: true,
-      sourceMap: true,
+  return JSON.stringify(
+    {
+      compilerOptions: {
+        target: 'ES2022',
+        module: 'NodeNext',
+        moduleResolution: 'NodeNext',
+        lib: ['ES2022'],
+        outDir: './dist',
+        rootDir: './src',
+        strict: true,
+        esModuleInterop: true,
+        skipLibCheck: true,
+        forceConsistentCasingInFileNames: true,
+        resolveJsonModule: true,
+        declaration: true,
+        sourceMap: true,
+      },
+      include: ['src/**/*'],
+      exclude: ['node_modules', 'dist'],
     },
-    include: ['src/**/*'],
-    exclude: ['node_modules', 'dist'],
-  }, null, 2);
+    null,
+    2
+  );
 }
 
 function generateJsConfig(): string {
-  return JSON.stringify({
-    compilerOptions: {
-      module: 'NodeNext',
-      moduleResolution: 'NodeNext',
-      target: 'ES2022',
-      checkJs: true,
+  return JSON.stringify(
+    {
+      compilerOptions: {
+        module: 'NodeNext',
+        moduleResolution: 'NodeNext',
+        target: 'ES2022',
+        checkJs: true,
+      },
+      include: ['src/**/*'],
+      exclude: ['node_modules'],
     },
-    include: ['src/**/*'],
-    exclude: ['node_modules'],
-  }, null, 2);
+    null,
+    2
+  );
 }
 
 function generateTsupConfig(): string {
@@ -518,6 +558,23 @@ volumes:
 volumes:
   mysql-data:
 `;
+  } else if (options.database === 'mongodb') {
+    compose += `      - MONGODB_URI=mongodb://mongodb:27017/mydb
+    depends_on:
+      - mongodb
+
+  mongodb:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_DATABASE: mydb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+
+volumes:
+  mongodb-data:
+`;
   }
 
   if (options.features.includes('redis')) {
@@ -583,10 +640,14 @@ main();
 function generateServerFile(options: InitOptions): string {
   const isTS = options.language === 'typescript';
 
-  return `${isTS ? `import Fastify from 'fastify';
+  return `${
+    isTS
+      ? `import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
-import { logger } from './logger.js';` : `const Fastify = require('fastify');
-const { logger } = require('./logger.js');`}
+import { logger } from './logger.js';`
+      : `const Fastify = require('fastify');
+const { logger } = require('./logger.js');`
+  }
 
 ${isTS ? 'export function createServer(): { instance: FastifyInstance; start: () => Promise<void> }' : 'function createServer()'} {
   const app = Fastify({ logger });
@@ -636,5 +697,114 @@ ${isTS ? 'export const logger: Logger' : 'const logger'} = pino({
 });
 
 ${isTS ? '' : 'module.exports = { logger };'}
+`;
+}
+
+function generateMongooseConnection(options: InitOptions): string {
+  const isTS = options.language === 'typescript';
+
+  return `${isTS ? "import mongoose from 'mongoose';\nimport { logger } from '../core/logger.js';" : "const mongoose = require('mongoose');\nconst { logger } = require('../core/logger.js');"}
+
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mydb';
+
+${isTS ? 'export async function connectDatabase(): Promise<typeof mongoose>' : 'async function connectDatabase()'} {
+  try {
+    const conn = await mongoose.connect(MONGODB_URI);
+    logger.info(\`MongoDB connected: \${conn.connection.host}\`);
+    return conn;
+  } catch (error) {
+    logger.error({ err: error }, 'MongoDB connection failed');
+    process.exit(1);
+  }
+}
+
+${isTS ? 'export async function disconnectDatabase(): Promise<void>' : 'async function disconnectDatabase()'} {
+  try {
+    await mongoose.disconnect();
+    logger.info('MongoDB disconnected');
+  } catch (error) {
+    logger.error({ err: error }, 'MongoDB disconnect failed');
+  }
+}
+
+${isTS ? 'export { mongoose };' : 'module.exports = { connectDatabase, disconnectDatabase, mongoose };'}
+`;
+}
+
+function generateMongooseUserModel(options: InitOptions): string {
+  const isTS = options.language === 'typescript';
+
+  return `${isTS ? "import mongoose, { Schema, Document } from 'mongoose';\nimport bcrypt from 'bcryptjs';" : "const mongoose = require('mongoose');\nconst bcrypt = require('bcryptjs');\nconst { Schema } = mongoose;"}
+
+${
+  isTS
+    ? `export interface IUser extends Document {
+  email: string;
+  password: string;
+  name?: string;
+  role: 'user' | 'admin';
+  status: 'active' | 'inactive' | 'suspended';
+  emailVerified: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  comparePassword(candidatePassword: string): Promise<boolean>;
+}`
+    : ''
+}
+
+const userSchema = new Schema${isTS ? '<IUser>' : ''}({
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+    trim: true,
+  },
+  password: {
+    type: String,
+    required: true,
+    minlength: 8,
+  },
+  name: {
+    type: String,
+    trim: true,
+  },
+  role: {
+    type: String,
+    enum: ['user', 'admin'],
+    default: 'user',
+  },
+  status: {
+    type: String,
+    enum: ['active', 'inactive', 'suspended'],
+    default: 'active',
+  },
+  emailVerified: {
+    type: Boolean,
+    default: false,
+  },
+}, {
+  timestamps: true,
+});
+
+// Hash password before saving
+userSchema.pre('save', async function(next) {
+  if (!this.isModified('password')) return next();
+
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error${isTS ? ': any' : ''}) {
+    next(error);
+  }
+});
+
+// Compare password method
+userSchema.methods.comparePassword = async function(candidatePassword${isTS ? ': string' : ''})${isTS ? ': Promise<boolean>' : ''} {
+  return bcrypt.compare(candidatePassword, this.password);
+};
+
+${isTS ? "export const User = mongoose.model<IUser>('User', userSchema);" : "const User = mongoose.model('User', userSchema);\nmodule.exports = { User };"}
 `;
 }

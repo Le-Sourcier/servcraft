@@ -5,6 +5,18 @@ import type { CronJobManager } from './cron.js';
 import type { JobStatus, JobOptions } from './types.js';
 
 /**
+ * Helper to get required param or send error
+ */
+function getRequiredParam(req: Request, res: Response, paramName: string): string | null {
+  const value = req.params[paramName];
+  if (!value) {
+    res.status(400).json({ error: 'Bad Request', message: `${paramName} parameter is required` });
+    return null;
+  }
+  return value;
+}
+
+/**
  * Create queue management routes
  * These routes should be protected with authentication/authorization
  */
@@ -40,8 +52,9 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
    * Get queue statistics
    */
   router.get('/queues/:name/stats', async (req: Request, res: Response) => {
+    const name = getRequiredParam(req, res, 'name');
+    if (!name) return;
     try {
-      const { name } = req.params;
       const stats = await queueService.getStats(name);
 
       res.json({
@@ -50,7 +63,7 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Queue not found',
         });
@@ -70,7 +83,8 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
    */
   router.get('/queues/:name/metrics', async (req: Request, res: Response) => {
     try {
-      const { name } = req.params;
+      const name = getRequiredParam(req, res, 'name');
+      if (!name) return;
       const metrics = await queueService.getMetrics(name);
 
       res.json({
@@ -79,7 +93,7 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Queue not found or metrics disabled',
         });
@@ -99,7 +113,8 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
    */
   router.post('/queues/:name/pause', async (req: Request, res: Response) => {
     try {
-      const { name } = req.params;
+      const name = getRequiredParam(req, res, 'name');
+      if (!name) return;
       await queueService.pauseQueue(name);
 
       res.json({
@@ -108,7 +123,7 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Queue not found',
         });
@@ -128,7 +143,8 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
    */
   router.post('/queues/:name/resume', async (req: Request, res: Response) => {
     try {
-      const { name } = req.params;
+      const name = getRequiredParam(req, res, 'name');
+      if (!name) return;
       await queueService.resumeQueue(name);
 
       res.json({
@@ -137,7 +153,7 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Queue not found',
         });
@@ -159,11 +175,12 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
    */
   router.post('/queues/:name/jobs', async (req: Request, res: Response) => {
     try {
-      const { name } = req.params;
+      const name = getRequiredParam(req, res, 'name');
+      if (!name) return;
       const { jobName, data, options } = req.body;
 
       if (!jobName || !data) {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: 'jobName and data are required',
         });
@@ -190,11 +207,12 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
    */
   router.post('/queues/:name/jobs/bulk', async (req: Request, res: Response) => {
     try {
-      const { name } = req.params;
+      const name = getRequiredParam(req, res, 'name');
+      if (!name) return;
       const { jobs } = req.body;
 
       if (!jobs || !Array.isArray(jobs)) {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: 'jobs array is required',
         });
@@ -222,7 +240,8 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
    */
   router.get('/queues/:name/jobs', async (req: Request, res: Response) => {
     try {
-      const { name } = req.params;
+      const name = getRequiredParam(req, res, 'name');
+      if (!name) return;
       const { status, jobName, limit, offset, startDate, endDate } = req.query;
 
       const jobs = await queueService.listJobs(name, {
@@ -241,7 +260,7 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Queue not found',
         });
@@ -260,8 +279,10 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
    * Get a specific job
    */
   router.get('/queues/:name/jobs/:id', async (req: Request, res: Response) => {
+    const name = getRequiredParam(req, res, 'name');
+    const id = getRequiredParam(req, res, 'id');
+    if (!name || !id) return;
     try {
-      const { name, id } = req.params;
       const job = await queueService.getJob(name, id);
 
       res.json({
@@ -270,7 +291,7 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Job or queue not found',
         });
@@ -289,8 +310,10 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
    * Remove a job
    */
   router.delete('/queues/:name/jobs/:id', async (req: Request, res: Response) => {
+    const name = getRequiredParam(req, res, 'name');
+    const id = getRequiredParam(req, res, 'id');
+    if (!name || !id) return;
     try {
-      const { name, id } = req.params;
       await queueService.removeJob(name, id);
 
       res.json({
@@ -299,14 +322,14 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Job or queue not found',
         });
       }
 
       if (error instanceof Error && error.message.includes('Cannot remove')) {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: error.message,
         });
@@ -325,8 +348,10 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
    * Retry a failed job
    */
   router.post('/queues/:name/jobs/:id/retry', async (req: Request, res: Response) => {
+    const name = getRequiredParam(req, res, 'name');
+    const id = getRequiredParam(req, res, 'id');
+    if (!name || !id) return;
     try {
-      const { name, id } = req.params;
       await queueService.retryJob(name, id);
 
       res.json({
@@ -335,14 +360,14 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Job or queue not found',
         });
       }
 
       if (error instanceof Error && error.message.includes('Can only retry')) {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: error.message,
         });
@@ -362,7 +387,8 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
    */
   router.post('/queues/:name/clean', async (req: Request, res: Response) => {
     try {
-      const { name } = req.params;
+      const name = getRequiredParam(req, res, 'name');
+      if (!name) return;
       const { status = 'completed', olderThanMs = 86400000 } = req.body;
 
       const cleaned = await queueService.cleanJobs(name, status as JobStatus, olderThanMs);
@@ -374,7 +400,7 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Queue not found',
         });
@@ -399,7 +425,7 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
       const { name, cron, queueName, jobName, data, options } = req.body;
 
       if (!name || !cron || !queueName || !jobName) {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: 'name, cron, queueName, and jobName are required',
         });
@@ -454,8 +480,9 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
    * Get a specific cron job
    */
   router.get('/cron/:id', async (req: Request, res: Response) => {
+    const id = getRequiredParam(req, res, 'id');
+    if (!id) return;
     try {
-      const { id } = req.params;
       const cronJob = await cronManager.getCronJob(id);
 
       res.json({
@@ -464,7 +491,7 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Cron job not found',
         });
@@ -483,10 +510,10 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
    * Update a cron job
    */
   router.patch('/cron/:id', async (req: Request, res: Response) => {
+    const id = getRequiredParam(req, res, 'id');
+    if (!id) return;
     try {
-      const { id } = req.params;
       const updates = req.body;
-
       const cronJob = await cronManager.updateCronJob(id, updates);
 
       res.json({
@@ -495,7 +522,7 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Cron job not found',
         });
@@ -514,8 +541,9 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
    * Delete a cron job
    */
   router.delete('/cron/:id', async (req: Request, res: Response) => {
+    const id = getRequiredParam(req, res, 'id');
+    if (!id) return;
     try {
-      const { id } = req.params;
       await cronManager.deleteCronJob(id);
 
       res.json({
@@ -524,7 +552,7 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Cron job not found',
         });
@@ -543,8 +571,9 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
    * Manually trigger a cron job
    */
   router.post('/cron/:id/trigger', async (req: Request, res: Response) => {
+    const id = getRequiredParam(req, res, 'id');
+    if (!id) return;
     try {
-      const { id } = req.params;
       await cronManager.triggerCronJob(id);
 
       res.json({
@@ -553,7 +582,7 @@ export function createQueueRoutes(queueService: QueueService, cronManager: CronJ
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Cron job not found',
         });

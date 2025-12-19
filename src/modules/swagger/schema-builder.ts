@@ -24,8 +24,16 @@ export function buildOpenApiSchema(
   }
 
   if (includeTimestamps) {
-    properties.createdAt = { type: 'string', format: 'date-time', description: 'Creation timestamp' };
-    properties.updatedAt = { type: 'string', format: 'date-time', description: 'Last update timestamp' };
+    properties.createdAt = {
+      type: 'string',
+      format: 'date-time',
+      description: 'Creation timestamp',
+    };
+    properties.updatedAt = {
+      type: 'string',
+      format: 'date-time',
+      description: 'Last update timestamp',
+    };
   }
 
   return {
@@ -106,7 +114,10 @@ export function generateRouteSchema(
                   properties: {
                     data: {
                       type: 'array',
-                      items: buildOpenApiSchema(fields, { includeId: true, includeTimestamps: true }),
+                      items: buildOpenApiSchema(fields, {
+                        includeId: true,
+                        includeTimestamps: true,
+                      }),
                     },
                     meta: {
                       type: 'object',
@@ -190,7 +201,7 @@ export function generateRouteSchema(
         },
       };
 
-    case 'update':
+    case 'update': {
       // Make all fields optional for update
       const optionalFields = fields.map((f) => ({ ...f, isOptional: true }));
       return {
@@ -226,6 +237,7 @@ export function generateRouteSchema(
           },
         },
       };
+    }
 
     case 'delete':
       return {

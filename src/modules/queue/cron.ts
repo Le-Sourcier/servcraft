@@ -40,7 +40,7 @@ export class CronJobManager {
       data,
       enabled: true,
       createdAt: new Date(),
-      nextRun: this.calculateNextRun(cron),
+      nextRun: this.calculateNextRun(cron) ?? undefined,
     };
 
     cronJobs.set(cronJob.id, cronJob);
@@ -97,7 +97,7 @@ export class CronJobManager {
         throw new BadRequestError('Invalid cron expression');
       }
       cronJob.cron = updates.cron;
-      cronJob.nextRun = this.calculateNextRun(updates.cron);
+      cronJob.nextRun = this.calculateNextRun(updates.cron) ?? undefined;
     }
 
     if (updates.data !== undefined) {
@@ -234,7 +234,10 @@ export class CronJobManager {
 
     for (let i = 0; i < 5; i++) {
       const part = parts[i];
-      const [min, max] = ranges[i];
+      const range = ranges[i];
+      if (!part || !range) continue;
+      const [min, max] = range;
+      if (min === undefined || max === undefined) continue;
 
       if (part === '*') continue;
 
@@ -247,8 +250,18 @@ export class CronJobManager {
 
       // Handle ranges (e.g., 1-5)
       if (part.includes('-')) {
-        const [start, end] = part.split('-').map((n) => parseInt(n, 10));
-        if (isNaN(start) || isNaN(end) || start < min || end > max || start > end) {
+        const rangeParts = part.split('-').map((n) => parseInt(n, 10));
+        const start = rangeParts[0];
+        const end = rangeParts[1];
+        if (
+          start === undefined ||
+          end === undefined ||
+          isNaN(start) ||
+          isNaN(end) ||
+          start < min ||
+          end > max ||
+          start > end
+        ) {
           return false;
         }
         continue;
@@ -285,11 +298,11 @@ export class CronJobManager {
     }
 
     // Parse cron parts
-    const minute = this.parseCronPart(parts[0], 0, 59);
-    const hour = this.parseCronPart(parts[1], 0, 23);
-    const day = this.parseCronPart(parts[2], 1, 31);
-    const month = this.parseCronPart(parts[3], 1, 12);
-    const dayOfWeek = this.parseCronPart(parts[4], 0, 6);
+    const minute = this.parseCronPart(parts[0] ?? '*', 0, 59);
+    const hour = this.parseCronPart(parts[1] ?? '*', 0, 23);
+    const day = this.parseCronPart(parts[2] ?? '*', 1, 31);
+    const month = this.parseCronPart(parts[3] ?? '*', 1, 12);
+    const dayOfWeek = this.parseCronPart(parts[4] ?? '*', 0, 6);
 
     // Find next valid time
     // This is a simplified implementation
@@ -348,8 +361,10 @@ export class CronJobManager {
     }
 
     if (part.includes('-')) {
-      const [start, end] = part.split('-').map((n) => parseInt(n, 10));
-      const values = [];
+      const rangeParts = part.split('-').map((n) => parseInt(n, 10));
+      const start = rangeParts[0] ?? min;
+      const end = rangeParts[1] ?? max;
+      const values: number[] = [];
       for (let i = start; i <= end; i++) {
         values.push(i);
       }

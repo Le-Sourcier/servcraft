@@ -20,10 +20,7 @@ export class UserRepository {
     return null;
   }
 
-  async findMany(
-    params: PaginationParams,
-    filters?: UserFilters
-  ): Promise<PaginatedResult<User>> {
+  async findMany(params: PaginationParams, filters?: UserFilters): Promise<PaginatedResult<User>> {
     let filteredUsers = Array.from(users.values());
 
     // Apply filters
@@ -40,9 +37,7 @@ export class UserRepository {
       if (filters.search) {
         const search = filters.search.toLowerCase();
         filteredUsers = filteredUsers.filter(
-          (u) =>
-            u.email.toLowerCase().includes(search) ||
-            u.name?.toLowerCase().includes(search)
+          (u) => u.email.toLowerCase().includes(search) || u.name?.toLowerCase().includes(search)
         );
       }
     }

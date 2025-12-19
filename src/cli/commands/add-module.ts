@@ -273,7 +273,7 @@ export const addModuleCommand = new Command('add')
           spinner.succeed(`${module.name} module added successfully!`);
         }
 
-        if (!moduleExists || action === 'overwrite' || action === 'backup-overwrite') {
+        if (!moduleExists) {
           console.log('\n📁 Files created:');
           module.files.forEach((f) => success(`  src/modules/${moduleName}/${f}.ts`));
         }

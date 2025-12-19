@@ -157,7 +157,7 @@ export class GitHubOAuthProvider {
     let lastName: string | null = null;
     if (userData.name) {
       const parts = userData.name.split(' ');
-      firstName = parts[0];
+      firstName = parts[0] ?? null;
       lastName = parts.slice(1).join(' ') || null;
     }
 

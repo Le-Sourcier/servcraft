@@ -12,7 +12,7 @@ export function validateBody<T>(schema: ZodSchema<T>, data: unknown): T {
   return result.data;
 }
 
-export function validateQuery<T>(schema: ZodSchema<T>, data: unknown): T {
+export function validateQuery<T extends z.ZodTypeAny>(schema: T, data: unknown): z.infer<T> {
   const result = schema.safeParse(data);
 
   if (!result.success) {
@@ -83,21 +83,16 @@ export const passwordSchema = z
 export const urlSchema = z.string().url('Invalid URL format');
 
 // Phone validation (basic international format)
-export const phoneSchema = z.string().regex(
-  /^\+?[1-9]\d{1,14}$/,
-  'Invalid phone number format'
-);
+export const phoneSchema = z.string().regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number format');
 
 // Date validation
 export const dateSchema = z.coerce.date();
-export const futureDateSchema = z.coerce.date().refine(
-  (date) => date > new Date(),
-  'Date must be in the future'
-);
-export const pastDateSchema = z.coerce.date().refine(
-  (date) => date < new Date(),
-  'Date must be in the past'
-);
+export const futureDateSchema = z.coerce
+  .date()
+  .refine((date) => date > new Date(), 'Date must be in the future');
+export const pastDateSchema = z.coerce
+  .date()
+  .refine((date) => date < new Date(), 'Date must be in the past');
 
 // Type exports
 export type IdParam = z.infer<typeof idParamSchema>;

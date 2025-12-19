@@ -2,10 +2,9 @@ import { Command } from 'commander';
 import { execSync, spawn } from 'child_process';
 import ora from 'ora';
 import chalk from 'chalk';
-import { success, error, info } from '../utils/helpers.js';
+import { error, info } from '../utils/helpers.js';
 
-export const dbCommand = new Command('db')
-  .description('Database management commands');
+export const dbCommand = new Command('db').description('Database management commands');
 
 dbCommand
   .command('migrate')
@@ -131,7 +130,7 @@ dbCommand
   .action(async () => {
     try {
       execSync('npx prisma migrate status', { stdio: 'inherit' });
-    } catch (err) {
+    } catch {
       error('Failed to get migration status');
     }
   });

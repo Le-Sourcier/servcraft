@@ -20,7 +20,7 @@ export class StripeProvider {
       // Dynamic import to avoid requiring stripe if not used
       const Stripe = await import('stripe');
       this.stripe = new Stripe.default(this.config.secretKey, {
-        apiVersion: '2023-10-16',
+        apiVersion: '2025-02-24.acacia',
       });
       logger.info('Stripe provider initialized');
     } catch {

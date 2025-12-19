@@ -112,7 +112,7 @@ export class CustomDelayStrategy implements WebhookRetryStrategy {
       return -1;
     }
 
-    return this.delays[attempt];
+    return this.delays[attempt] ?? -1;
   }
 
   shouldRetry(attempt: number): boolean {

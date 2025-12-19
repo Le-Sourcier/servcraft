@@ -408,7 +408,7 @@ export class MFAService {
 
     return {
       success,
-      method,
+      method: method || 'totp',
       remainingAttempts: success
         ? undefined
         : MAX_ATTEMPTS - (failedAttempts.get(userId)?.count || 0),
@@ -455,7 +455,10 @@ export class MFAService {
     let code = '';
     const bytes = randomBytes(length);
     for (let i = 0; i < length; i++) {
-      code += digits[bytes[i] % 10];
+      const byteValue = bytes[i];
+      if (byteValue !== undefined) {
+        code += digits[byteValue % 10];
+      }
     }
     return code;
   }

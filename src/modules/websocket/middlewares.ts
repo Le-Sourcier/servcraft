@@ -288,7 +288,8 @@ export function errorMiddleware(): SocketMiddleware {
     const authSocket = socket as AuthenticatedSocket;
 
     // Catch all errors
-    authSocket.on('error', (error: Error) => {
+    authSocket.on('error', (...args: unknown[]) => {
+      const error = args[0] instanceof Error ? args[0] : new Error(String(args[0]));
       logger.error({ error, socketId: authSocket.id, userId: authSocket.userId }, 'Socket error');
     });
 

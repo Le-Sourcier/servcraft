@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { logger } from '../../core/logger.js';
-import { UserService, createUserService } from './user.service.js';
-import { UserController, createUserController } from './user.controller.js';
-import { UserRepository, createUserRepository } from './user.repository.js';
+import { createUserService } from './user.service.js';
+import { createUserController } from './user.controller.js';
+import { createUserRepository } from './user.repository.js';
 import { registerUserRoutes } from './user.routes.js';
 import type { AuthService } from '../auth/auth.service.js';
 

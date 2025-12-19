@@ -1,6 +1,7 @@
 import type { PaginatedResult, PaginationParams } from '../../types/index.js';
 import { NotFoundError, ConflictError } from '../../utils/errors.js';
-import { UserRepository, createUserRepository } from './user.repository.js';
+import type { UserRepository } from './user.repository.js';
+import { createUserRepository } from './user.repository.js';
 import type { User, CreateUserData, UpdateUserData, UserFilters, UserRole } from './types.js';
 import { DEFAULT_ROLE_PERMISSIONS } from './types.js';
 import { logger } from '../../core/logger.js';
@@ -25,7 +26,7 @@ export class UserService {
     // Remove passwords from results
     return {
       ...result,
-      data: result.data.map(({ password, ...user }) => user) as Omit<User, 'password'>[],
+      data: result.data.map(({ password: _password, ...user }) => user) as Omit<User, 'password'>[],
     };
   }
 
@@ -126,7 +127,7 @@ export class UserService {
     }
 
     // Check wildcard match (e.g., "content:manage" matches "content:read")
-    const [resource, action] = permission.split(':');
+    const [resource] = permission.split(':');
     const managePermission = `${resource}:manage`;
     if (permissions.includes(managePermission)) {
       return true;

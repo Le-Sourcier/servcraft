@@ -223,8 +223,8 @@ export function registerOAuthRoutes(app: FastifyInstance, authService: AuthServi
           if (!userId) {
             const newUser = await authService.createUserFromOAuth({
               email: oauthUser.email || `${oauthUser.providerAccountId}@${provider}.oauth`,
-              name: oauthUser.name,
-              picture: oauthUser.picture,
+              name: oauthUser.name ?? undefined,
+              picture: oauthUser.picture ?? undefined,
               emailVerified: oauthUser.emailVerified,
             });
             userId = newUser.id;
@@ -309,8 +309,9 @@ export function registerOAuthRoutes(app: FastifyInstance, authService: AuthServi
         },
       },
     },
-    async (request: FastifyRequest<{ Params: { provider: string } }>, reply: FastifyReply) => {
-      const provider = request.params.provider as OAuthProvider;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const params = request.params as { provider: string };
+      const provider = params.provider as OAuthProvider;
       const user = (request as FastifyRequest & { user: { id: string } }).user;
 
       if (!oauthService.isProviderEnabled(provider)) {
@@ -374,8 +375,9 @@ export function registerOAuthRoutes(app: FastifyInstance, authService: AuthServi
         },
       },
     },
-    async (request: FastifyRequest<{ Params: { provider: string } }>, reply: FastifyReply) => {
-      const provider = request.params.provider as OAuthProvider;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const params = request.params as { provider: string };
+      const provider = params.provider as OAuthProvider;
       const user = (request as FastifyRequest & { user: { id: string } }).user;
 
       await oauthService.unlinkAccount(user.id, provider);

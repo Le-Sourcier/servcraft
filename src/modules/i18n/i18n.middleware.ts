@@ -109,8 +109,9 @@ export function detectLocale(
   }
 
   // 4. Use default locale
+  const defaultLocale = i18nService.getSupportedLocales()[0] || 'en';
   return {
-    locale: i18nService.getSupportedLocales()[0],
+    locale: defaultLocale,
     source: 'default',
     confidence: 0.5,
   };
@@ -127,9 +128,10 @@ function parseAcceptLanguage(
     .split(',')
     .map((lang) => {
       const parts = lang.trim().split(';');
-      const locale = parts[0].split('-')[0]; // Get base language (e.g., 'en' from 'en-US')
+      const localePart = parts[0]?.split('-')[0];
+      const locale = localePart || 'en'; // Get base language (e.g., 'en' from 'en-US')
       const qMatch = parts[1]?.match(/q=([\d.]+)/);
-      const quality = qMatch ? parseFloat(qMatch[1]) : 1.0;
+      const quality = qMatch?.[1] ? parseFloat(qMatch[1]) : 1.0;
 
       return { locale, quality };
     })
@@ -138,7 +140,7 @@ function parseAcceptLanguage(
   // Find first supported locale
   for (const lang of languages) {
     if (i18nService.isLocaleSupported(lang.locale)) {
-      return lang;
+      return { locale: lang.locale, quality: lang.quality };
     }
   }
 

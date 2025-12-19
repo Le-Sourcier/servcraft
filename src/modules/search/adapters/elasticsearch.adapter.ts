@@ -101,10 +101,10 @@ export class ElasticsearchAdapter implements SearchEngine {
 
     result.items.forEach((item, idx) => {
       const operation = Object.values(item)[0];
-      if (operation.error) {
+      if (operation && operation.error) {
         failed++;
         errors.push({
-          id: operations[idx].id,
+          id: operations[idx]?.id ?? 'unknown',
           error: JSON.stringify(operation.error),
         });
       } else {
@@ -276,6 +276,10 @@ export class ElasticsearchAdapter implements SearchEngine {
     };
 
     const indexStats = stats.indices[indexName];
+
+    if (!indexStats) {
+      throw new Error(`Index ${indexName} not found`);
+    }
 
     return {
       name: indexName,

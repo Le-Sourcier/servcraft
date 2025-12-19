@@ -3,8 +3,8 @@ import jwt from '@fastify/jwt';
 import cookie from '@fastify/cookie';
 import { config } from '../../config/index.js';
 import { logger } from '../../core/logger.js';
-import { AuthService, createAuthService } from './auth.service.js';
-import { AuthController, createAuthController } from './auth.controller.js';
+import { createAuthService } from './auth.service.js';
+import { createAuthController } from './auth.controller.js';
 import { registerAuthRoutes } from './auth.routes.js';
 import { createUserService } from '../user/user.service.js';
 

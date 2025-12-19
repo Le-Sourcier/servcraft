@@ -6,7 +6,10 @@ export const MAX_LIMIT = 100;
 
 export function parsePaginationParams(query: Record<string, unknown>): PaginationParams {
   const page = Math.max(1, parseInt(String(query.page || DEFAULT_PAGE), 10));
-  const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(String(query.limit || DEFAULT_LIMIT), 10)));
+  const limit = Math.min(
+    MAX_LIMIT,
+    Math.max(1, parseInt(String(query.limit || DEFAULT_LIMIT), 10))
+  );
   const sortBy = typeof query.sortBy === 'string' ? query.sortBy : undefined;
   const sortOrder = query.sortOrder === 'desc' ? 'desc' : 'asc';
 

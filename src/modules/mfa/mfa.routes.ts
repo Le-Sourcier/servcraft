@@ -147,9 +147,10 @@ export function registerMFARoutes(app: FastifyInstance, authService: AuthService
         },
       },
     },
-    async (request: FastifyRequest<{ Body: { code: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const user = (request as FastifyRequest & { user: { id: string } }).user;
-      const verified = await mfaService.verifyTOTPSetup(user.id, request.body.code);
+      const { code } = request.body as { code: string };
+      const verified = await mfaService.verifyTOTPSetup(user.id, code);
 
       if (!verified) {
         return reply.status(400).send({
@@ -200,9 +201,10 @@ export function registerMFARoutes(app: FastifyInstance, authService: AuthService
         },
       },
     },
-    async (request: FastifyRequest<{ Body: { code: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const user = (request as FastifyRequest & { user: { id: string } }).user;
-      await mfaService.disableTOTP(user.id, request.body.code);
+      const { code } = request.body as { code: string };
+      await mfaService.disableTOTP(user.id, code);
 
       return reply.send({
         success: true,
@@ -240,9 +242,10 @@ export function registerMFARoutes(app: FastifyInstance, authService: AuthService
         },
       },
     },
-    async (request: FastifyRequest<{ Body: { phoneNumber: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const user = (request as FastifyRequest & { user: { id: string } }).user;
-      await mfaService.setupSMS(user.id, request.body.phoneNumber);
+      const { phoneNumber } = request.body as { phoneNumber: string };
+      await mfaService.setupSMS(user.id, phoneNumber);
 
       return reply.send({
         success: true,
@@ -280,9 +283,10 @@ export function registerMFARoutes(app: FastifyInstance, authService: AuthService
         },
       },
     },
-    async (request: FastifyRequest<{ Body: { code: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const user = (request as FastifyRequest & { user: { id: string } }).user;
-      const verified = await mfaService.verifySMSSetup(user.id, request.body.code);
+      const { code } = request.body as { code: string };
+      const verified = await mfaService.verifySMSSetup(user.id, code);
 
       return reply.send({
         success: true,
@@ -319,9 +323,10 @@ export function registerMFARoutes(app: FastifyInstance, authService: AuthService
         },
       },
     },
-    async (request: FastifyRequest<{ Body: { email?: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const user = (request as FastifyRequest & { user: { id: string; email: string } }).user;
-      const email = request.body.email || user.email;
+      const body = request.body as { email?: string };
+      const email = body.email || user.email;
       await mfaService.setupEmail(user.id, email);
 
       return reply.send({
@@ -360,9 +365,10 @@ export function registerMFARoutes(app: FastifyInstance, authService: AuthService
         },
       },
     },
-    async (request: FastifyRequest<{ Body: { code: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const user = (request as FastifyRequest & { user: { id: string } }).user;
-      const verified = await mfaService.verifyEmailSetup(user.id, request.body.code);
+      const { code } = request.body as { code: string };
+      const verified = await mfaService.verifyEmailSetup(user.id, code);
 
       return reply.send({
         success: true,
@@ -407,11 +413,12 @@ export function registerMFARoutes(app: FastifyInstance, authService: AuthService
         },
       },
     },
-    async (request: FastifyRequest<{ Body: { code: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const user = (request as FastifyRequest & { user: { id: string } }).user;
+      const { code } = request.body as { code: string };
 
       // Verify current MFA first
-      const verifyResult = await mfaService.verifyChallenge(user.id, request.body.code);
+      const verifyResult = await mfaService.verifyChallenge(user.id, code);
       if (!verifyResult.success) {
         return reply.status(400).send({
           success: false,
@@ -466,13 +473,13 @@ export function registerMFARoutes(app: FastifyInstance, authService: AuthService
         },
       },
     },
-    async (
-      request: FastifyRequest<{
-        Body: { userId: string; code: string; method?: MFAMethod; challengeId?: string };
-      }>,
-      reply: FastifyReply
-    ) => {
-      const { userId, code, method, challengeId } = request.body;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { userId, code, method, challengeId } = request.body as {
+        userId: string;
+        code: string;
+        method?: MFAMethod;
+        challengeId?: string;
+      };
       const result = await mfaService.verifyChallenge(userId, code, method, challengeId);
 
       return reply.send({
@@ -521,11 +528,8 @@ export function registerMFARoutes(app: FastifyInstance, authService: AuthService
         },
       },
     },
-    async (
-      request: FastifyRequest<{ Body: { userId: string; method: MFAMethod } }>,
-      reply: FastifyReply
-    ) => {
-      const { userId, method } = request.body;
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { userId, method } = request.body as { userId: string; method: MFAMethod };
       const challenge = await mfaService.createChallenge(userId, method);
 
       return reply.send({
@@ -567,11 +571,12 @@ export function registerMFARoutes(app: FastifyInstance, authService: AuthService
         },
       },
     },
-    async (request: FastifyRequest<{ Body: { password: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const user = (request as FastifyRequest & { user: { id: string } }).user;
+      const { password } = request.body as { password: string };
 
       // Verify password before disabling MFA
-      const isValid = await authService.verifyPassword(user.id, request.body.password);
+      const isValid = await authService.verifyPasswordById(user.id, password);
       if (!isValid) {
         return reply.status(400).send({
           success: false,

@@ -64,12 +64,13 @@ export function generateTOTP(secret: string, timestamp?: number): string {
   const hash = hmac.digest();
 
   // Dynamic truncation
-  const offset = hash[hash.length - 1] & 0xf;
+  const lastByte = hash[hash.length - 1] ?? 0;
+  const offset = lastByte & 0xf;
   const binary =
-    ((hash[offset] & 0x7f) << 24) |
-    ((hash[offset + 1] & 0xff) << 16) |
-    ((hash[offset + 2] & 0xff) << 8) |
-    (hash[offset + 3] & 0xff);
+    (((hash[offset] ?? 0) & 0x7f) << 24) |
+    (((hash[offset + 1] ?? 0) & 0xff) << 16) |
+    (((hash[offset + 2] ?? 0) & 0xff) << 8) |
+    ((hash[offset + 3] ?? 0) & 0xff);
 
   // Generate OTP
   const otp = binary % Math.pow(10, TOTP_DIGITS);

@@ -409,9 +409,15 @@ export class FeatureFlagService {
       case 'ne':
         return userValue !== rule.value;
       case 'in':
-        return Array.isArray(rule.value) && rule.value.includes(userValue as string | number);
+        return (
+          Array.isArray(rule.value) &&
+          (rule.value as (string | number)[]).includes(userValue as string | number)
+        );
       case 'nin':
-        return Array.isArray(rule.value) && !rule.value.includes(userValue as string | number);
+        return (
+          Array.isArray(rule.value) &&
+          !(rule.value as (string | number)[]).includes(userValue as string | number)
+        );
       case 'gt':
         return typeof userValue === 'number' && userValue > (rule.value as number);
       case 'gte':

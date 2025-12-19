@@ -57,7 +57,7 @@ export interface ChangePasswordData {
 // Extend Fastify types
 declare module 'fastify' {
   interface FastifyRequest {
-    user?: AuthUser;
+    user: AuthUser;
   }
 }
 

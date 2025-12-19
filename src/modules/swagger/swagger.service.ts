@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
-import { config, isDevelopment } from '../../config/index.js';
+import { config } from '../../config/index.js';
 import { logger } from '../../core/logger.js';
 import type { SwaggerConfig } from './types.js';
 
@@ -70,7 +70,7 @@ export async function registerSwagger(
 }
 
 // Helper to generate schema from Zod
-export function zodToJsonSchema(zodSchema: unknown): Record<string, unknown> {
+export function zodToJsonSchema(_zodSchema: unknown): Record<string, unknown> {
   // This is a simplified version - for full support use zod-to-json-schema package
   return {
     type: 'object',
@@ -145,7 +145,13 @@ export const paginationQuery = {
   type: 'object',
   properties: {
     page: { type: 'integer', minimum: 1, default: 1, description: 'Page number' },
-    limit: { type: 'integer', minimum: 1, maximum: 100, default: 20, description: 'Items per page' },
+    limit: {
+      type: 'integer',
+      minimum: 1,
+      maximum: 100,
+      default: 20,
+      description: 'Items per page',
+    },
     sortBy: { type: 'string', description: 'Field to sort by' },
     sortOrder: { type: 'string', enum: ['asc', 'desc'], default: 'asc', description: 'Sort order' },
     search: { type: 'string', description: 'Search query' },

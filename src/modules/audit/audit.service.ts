@@ -68,7 +68,10 @@ export class AuditService {
     return createPaginatedResult(data, total, { page, limit });
   }
 
-  async findByUser(userId: string, limit = 50): Promise<(AuditLogEntry & { id: string; createdAt: Date })[]> {
+  async findByUser(
+    userId: string,
+    limit = 50
+  ): Promise<(AuditLogEntry & { id: string; createdAt: Date })[]> {
     const result = await this.query({ userId, limit });
     return result.data;
   }
@@ -136,10 +139,7 @@ export class AuditService {
     });
   }
 
-  async logLogin(
-    userId: string,
-    meta?: { ipAddress?: string; userAgent?: string }
-  ): Promise<void> {
+  async logLogin(userId: string, meta?: { ipAddress?: string; userAgent?: string }): Promise<void> {
     await this.log({
       action: 'login',
       resource: 'auth',

@@ -16,6 +16,7 @@ export class RateLimitService {
   private store: RateLimitStore;
 
   constructor(config: RateLimitConfig, store?: RateLimitStore) {
+    const defaultStore = new MemoryStore();
     this.config = {
       max: config.max,
       windowMs: config.windowMs,
@@ -23,15 +24,16 @@ export class RateLimitService {
       whitelist: config.whitelist || [],
       blacklist: config.blacklist || [],
       keyGenerator: config.keyGenerator || ((req: RateLimitRequest): string => req.ip),
-      skip: config.skip,
-      onLimitReached: config.onLimitReached,
-      store: config.store,
+      skip: config.skip || ((): boolean => false),
+      onLimitReached: config.onLimitReached || ((): void => {}),
+      store: (config.store || defaultStore) as RateLimitStore,
       headers: config.headers !== false,
-      message: config.message,
+      message: config.message || 'Too many requests',
       statusCode: config.statusCode || 429,
+      customLimits: config.customLimits || {},
     };
 
-    this.store = store || new MemoryStore();
+    this.store = (store || defaultStore) as RateLimitStore;
   }
 
   /**
@@ -86,9 +88,10 @@ export class RateLimitService {
     const now = Date.now();
 
     // Create new window if none exists or if expired
-    if (!entry || entry.resetAt <= now) {
+    if (!entry || !entry.resetAt || entry.resetAt <= now) {
       entry = {
         count: 1,
+        startTime: now,
         resetAt: now + windowMs,
         firstRequest: now,
         lastRequest: now,
@@ -99,7 +102,7 @@ export class RateLimitService {
         allowed: true,
         limit: max,
         remaining: max - 1,
-        resetAt: entry.resetAt,
+        resetAt: entry.resetAt ?? now + windowMs,
       };
     }
 
@@ -109,13 +112,14 @@ export class RateLimitService {
     await this.store.set(key, entry);
 
     const allowed = entry.count <= max;
+    const resetAt = entry.resetAt ?? now + windowMs;
 
     return {
       allowed,
       limit: max,
       remaining: Math.max(0, max - entry.count),
-      resetAt: entry.resetAt,
-      retryAfter: allowed ? undefined : Math.ceil((entry.resetAt - now) / 1000),
+      resetAt,
+      retryAfter: allowed ? undefined : Math.ceil((resetAt - now) / 1000),
     };
   }
 
@@ -134,6 +138,7 @@ export class RateLimitService {
     if (!entry) {
       entry = {
         count: 1,
+        startTime: now,
         resetAt: now + windowMs,
         firstRequest: now,
         lastRequest: now,
@@ -144,18 +149,20 @@ export class RateLimitService {
         allowed: true,
         limit: max,
         remaining: max - 1,
-        resetAt: entry.resetAt,
+        resetAt: entry.resetAt ?? now + windowMs,
       };
     }
 
     // Calculate sliding window
-    const timeInWindow = now - entry.firstRequest;
+    const firstRequest = entry.firstRequest ?? entry.startTime;
+    const timeInWindow = now - firstRequest;
     const windowProgress = timeInWindow / windowMs;
 
     // If we're past the window, reset
     if (windowProgress >= 1) {
       entry = {
         count: 1,
+        startTime: now,
         resetAt: now + windowMs,
         firstRequest: now,
         lastRequest: now,
@@ -166,7 +173,7 @@ export class RateLimitService {
         allowed: true,
         limit: max,
         remaining: max - 1,
-        resetAt: entry.resetAt,
+        resetAt: entry.resetAt ?? now + windowMs,
       };
     }
 
@@ -179,13 +186,14 @@ export class RateLimitService {
     await this.store.set(key, entry);
 
     const allowed = currentCount <= max;
+    const resetAt = entry.resetAt ?? now + windowMs;
 
     return {
       allowed,
       limit: max,
       remaining: Math.max(0, max - currentCount),
-      resetAt: entry.resetAt,
-      retryAfter: allowed ? undefined : Math.ceil((entry.resetAt - now) / 1000),
+      resetAt,
+      retryAfter: allowed ? undefined : Math.ceil((resetAt - now) / 1000),
     };
   }
 
@@ -200,6 +208,7 @@ export class RateLimitService {
     if (!entry) {
       entry = {
         count: max - 1, // Start with full bucket minus 1
+        startTime: now,
         resetAt: now + windowMs,
         firstRequest: now,
         lastRequest: now,
@@ -210,12 +219,13 @@ export class RateLimitService {
         allowed: true,
         limit: max,
         remaining: max - 1,
-        resetAt: entry.resetAt,
+        resetAt: entry.resetAt ?? now + windowMs,
       };
     }
 
     // Refill tokens based on time passed
-    const timePassed = now - entry.lastRequest;
+    const lastRequest = entry.lastRequest ?? entry.startTime;
+    const timePassed = now - lastRequest;
     const refillRate = max / windowMs;
     const tokensToAdd = Math.floor(timePassed * refillRate);
     const tokens = Math.min(max, entry.count + tokensToAdd);
@@ -237,12 +247,13 @@ export class RateLimitService {
 
     // Not enough tokens
     const timeUntilToken = Math.ceil((1 - tokens) / refillRate / 1000);
+    const resetAt = entry.resetAt ?? now + windowMs;
 
     return {
       allowed: false,
       limit: max,
       remaining: 0,
-      resetAt: entry.resetAt,
+      resetAt,
       retryAfter: timeUntilToken,
     };
   }
@@ -330,6 +341,8 @@ export class RateLimitService {
    * Cleanup expired entries
    */
   async cleanup(): Promise<void> {
-    await this.store.cleanup();
+    if (this.store.cleanup) {
+      await this.store.cleanup();
+    }
   }
 }

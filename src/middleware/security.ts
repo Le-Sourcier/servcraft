@@ -49,7 +49,7 @@ export async function registerSecurity(
       exposedHeaders: ['X-Total-Count', 'X-Page', 'X-Limit'],
       maxAge: 86400, // 24 hours
     });
-    logger.debug('CORS enabled', { origin: config.security.corsOrigin });
+    logger.debug({ origin: config.security.corsOrigin }, 'CORS enabled');
   }
 
   // Rate Limiting
@@ -65,16 +65,17 @@ export async function registerSecurity(
       keyGenerator: (request) => {
         // Use X-Forwarded-For if behind proxy, otherwise use IP
         return (
-          request.headers['x-forwarded-for']?.toString().split(',')[0] ||
-          request.ip ||
-          'unknown'
+          request.headers['x-forwarded-for']?.toString().split(',')[0] || request.ip || 'unknown'
         );
       },
     });
-    logger.debug('Rate limiting enabled', {
-      max: config.security.rateLimit.max,
-      windowMs: config.security.rateLimit.windowMs,
-    });
+    logger.debug(
+      {
+        max: config.security.rateLimit.max,
+        windowMs: config.security.rateLimit.windowMs,
+      },
+      'Rate limiting enabled'
+    );
   }
 }
 
@@ -91,9 +92,7 @@ export async function registerBruteForceProtection(
     timeWindow,
     keyGenerator: (request) => {
       const ip =
-        request.headers['x-forwarded-for']?.toString().split(',')[0] ||
-        request.ip ||
-        'unknown';
+        request.headers['x-forwarded-for']?.toString().split(',')[0] || request.ip || 'unknown';
       return `brute:${routePrefix}:${ip}`;
     },
     errorResponseBuilder: () => ({

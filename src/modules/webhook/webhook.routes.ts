@@ -16,15 +16,16 @@ export function createWebhookRoutes(service: WebhookService): Router {
    * POST /webhooks/endpoints
    * Create a new webhook endpoint
    */
-  router.post('/endpoints', async (req: Request, res: Response) => {
+  router.post('/endpoints', async (req: Request, res: Response): Promise<void> => {
     try {
       const { url, events, description, headers, metadata } = req.body;
 
       if (!url || !events || !Array.isArray(events)) {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: 'url and events array are required',
         });
+        return;
       }
 
       const endpoint = await service.createEndpoint({
@@ -74,9 +75,13 @@ export function createWebhookRoutes(service: WebhookService): Router {
    * GET /webhooks/endpoints/:id
    * Get a specific webhook endpoint
    */
-  router.get('/endpoints/:id', async (req: Request, res: Response) => {
+  router.get('/endpoints/:id', async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
+      if (!id) {
+        res.status(400).json({ error: 'Bad Request', message: 'id is required' });
+        return;
+      }
       const endpoint = await service.getEndpoint(id);
 
       res.json({
@@ -85,10 +90,11 @@ export function createWebhookRoutes(service: WebhookService): Router {
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Webhook endpoint not found',
         });
+        return;
       }
 
       console.error('[WebhookRoutes] Error getting endpoint:', error);
@@ -103,9 +109,13 @@ export function createWebhookRoutes(service: WebhookService): Router {
    * PATCH /webhooks/endpoints/:id
    * Update a webhook endpoint
    */
-  router.patch('/endpoints/:id', async (req: Request, res: Response) => {
+  router.patch('/endpoints/:id', async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
+      if (!id) {
+        res.status(400).json({ error: 'Bad Request', message: 'id is required' });
+        return;
+      }
       const { url, events, enabled, description, headers, metadata } = req.body;
 
       const endpoint = await service.updateEndpoint(id, {
@@ -123,10 +133,11 @@ export function createWebhookRoutes(service: WebhookService): Router {
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Webhook endpoint not found',
         });
+        return;
       }
 
       console.error('[WebhookRoutes] Error updating endpoint:', error);
@@ -141,9 +152,13 @@ export function createWebhookRoutes(service: WebhookService): Router {
    * DELETE /webhooks/endpoints/:id
    * Delete a webhook endpoint
    */
-  router.delete('/endpoints/:id', async (req: Request, res: Response) => {
+  router.delete('/endpoints/:id', async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
+      if (!id) {
+        res.status(400).json({ error: 'Bad Request', message: 'id is required' });
+        return;
+      }
       await service.deleteEndpoint(id);
 
       res.json({
@@ -152,10 +167,11 @@ export function createWebhookRoutes(service: WebhookService): Router {
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Webhook endpoint not found',
         });
+        return;
       }
 
       console.error('[WebhookRoutes] Error deleting endpoint:', error);
@@ -170,31 +186,39 @@ export function createWebhookRoutes(service: WebhookService): Router {
    * POST /webhooks/endpoints/:id/rotate-secret
    * Rotate webhook endpoint secret
    */
-  router.post('/endpoints/:id/rotate-secret', async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      const endpoint = await service.rotateSecret(id);
+  router.post(
+    '/endpoints/:id/rotate-secret',
+    async (req: Request, res: Response): Promise<void> => {
+      try {
+        const { id } = req.params;
+        if (!id) {
+          res.status(400).json({ error: 'Bad Request', message: 'id is required' });
+          return;
+        }
+        const endpoint = await service.rotateSecret(id);
 
-      res.json({
-        success: true,
-        data: endpoint,
-        message: 'Secret rotated successfully',
-      });
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
-          error: 'Not Found',
-          message: 'Webhook endpoint not found',
+        res.json({
+          success: true,
+          data: endpoint,
+          message: 'Secret rotated successfully',
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('not found')) {
+          res.status(404).json({
+            error: 'Not Found',
+            message: 'Webhook endpoint not found',
+          });
+          return;
+        }
+
+        console.error('[WebhookRoutes] Error rotating secret:', error);
+        res.status(500).json({
+          error: 'Internal Server Error',
+          message: 'Failed to rotate webhook secret',
         });
       }
-
-      console.error('[WebhookRoutes] Error rotating secret:', error);
-      res.status(500).json({
-        error: 'Internal Server Error',
-        message: 'Failed to rotate webhook secret',
-      });
     }
-  });
+  );
 
   // Event Publishing
 
@@ -202,15 +226,16 @@ export function createWebhookRoutes(service: WebhookService): Router {
    * POST /webhooks/events
    * Publish a webhook event
    */
-  router.post('/events', async (req: Request, res: Response) => {
+  router.post('/events', async (req: Request, res: Response): Promise<void> => {
     try {
       const { type, payload, endpoints } = req.body;
 
       if (!type || !payload) {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: 'type and payload are required',
         });
+        return;
       }
 
       const event = await service.publishEvent(type as WebhookEventType, payload, endpoints);
@@ -267,9 +292,13 @@ export function createWebhookRoutes(service: WebhookService): Router {
    * GET /webhooks/deliveries/:id
    * Get a specific webhook delivery
    */
-  router.get('/deliveries/:id', async (req: Request, res: Response) => {
+  router.get('/deliveries/:id', async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
+      if (!id) {
+        res.status(400).json({ error: 'Bad Request', message: 'id is required' });
+        return;
+      }
       const delivery = await service.getDelivery(id);
 
       res.json({
@@ -278,10 +307,11 @@ export function createWebhookRoutes(service: WebhookService): Router {
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Webhook delivery not found',
         });
+        return;
       }
 
       console.error('[WebhookRoutes] Error getting delivery:', error);
@@ -296,9 +326,13 @@ export function createWebhookRoutes(service: WebhookService): Router {
    * GET /webhooks/deliveries/:id/attempts
    * Get delivery attempts for a specific delivery
    */
-  router.get('/deliveries/:id/attempts', async (req: Request, res: Response) => {
+  router.get('/deliveries/:id/attempts', async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
+      if (!id) {
+        res.status(400).json({ error: 'Bad Request', message: 'id is required' });
+        return;
+      }
       const attempts = await service.getDeliveryAttempts(id);
 
       res.json({
@@ -319,9 +353,13 @@ export function createWebhookRoutes(service: WebhookService): Router {
    * POST /webhooks/deliveries/:id/retry
    * Manually retry a failed delivery
    */
-  router.post('/deliveries/:id/retry', async (req: Request, res: Response) => {
+  router.post('/deliveries/:id/retry', async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
+      if (!id) {
+        res.status(400).json({ error: 'Bad Request', message: 'id is required' });
+        return;
+      }
       await service.retryDelivery(id);
 
       res.json({
@@ -330,17 +368,19 @@ export function createWebhookRoutes(service: WebhookService): Router {
       });
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'Webhook delivery not found',
         });
+        return;
       }
 
       if (error instanceof Error && error.message.includes('Cannot retry')) {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: error.message,
         });
+        return;
       }
 
       console.error('[WebhookRoutes] Error retrying delivery:', error);

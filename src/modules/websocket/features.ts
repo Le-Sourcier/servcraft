@@ -105,7 +105,7 @@ export class ChatFeature {
 
     const message = messages[messageIndex];
 
-    if (message.userId !== userId) {
+    if (!message || message.userId !== userId) {
       throw new Error('Unauthorized');
     }
 

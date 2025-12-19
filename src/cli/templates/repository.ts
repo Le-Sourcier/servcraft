@@ -1,4 +1,9 @@
-export function repositoryTemplate(name: string, pascalName: string, camelName: string, pluralName: string): string {
+export function repositoryTemplate(
+  name: string,
+  pascalName: string,
+  camelName: string,
+  pluralName: string
+): string {
   return `import { randomUUID } from 'crypto';
 import type { PaginatedResult, PaginationParams } from '../../types/index.js';
 import { createPaginatedResult, getSkip } from '../../utils/pagination.js';

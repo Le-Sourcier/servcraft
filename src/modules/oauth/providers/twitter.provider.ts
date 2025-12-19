@@ -136,7 +136,7 @@ export class TwitterOAuthProvider {
       email: null, // Twitter doesn't provide email by default
       emailVerified: false,
       name: data.name,
-      firstName: data.name.split(' ')[0],
+      firstName: data.name.split(' ')[0] ?? null,
       lastName: data.name.split(' ').slice(1).join(' ') || null,
       picture: data.profile_image_url?.replace('_normal', '') || null,
       provider: 'twitter',

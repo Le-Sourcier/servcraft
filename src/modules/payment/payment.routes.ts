@@ -83,9 +83,10 @@ export function registerPaymentRoutes(app: FastifyInstance, authService: AuthSer
         },
       },
     },
-    async (request: FastifyRequest<{ Body: CreatePaymentData }>, reply: FastifyReply) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = (request as FastifyRequest & { user: { id: string } }).user.id;
-      const intent = await paymentService.createPayment({ ...request.body, userId });
+      const body = request.body as CreatePaymentData;
+      const intent = await paymentService.createPayment({ ...body, userId });
       return reply.status(201).send({ success: true, data: intent });
     }
   );
@@ -108,8 +109,9 @@ export function registerPaymentRoutes(app: FastifyInstance, authService: AuthSer
         },
       },
     },
-    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const payment = await paymentService.confirmPayment(request.params.id);
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const params = request.params as { id: string };
+      const payment = await paymentService.confirmPayment(params.id);
       return reply.send({ success: true, data: payment });
     }
   );
@@ -131,8 +133,9 @@ export function registerPaymentRoutes(app: FastifyInstance, authService: AuthSer
         },
       },
     },
-    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const payment = await paymentService.getPayment(request.params.id);
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const params = request.params as { id: string };
+      const payment = await paymentService.getPayment(params.id);
       if (!payment) {
         return reply.status(404).send({ success: false, message: 'Payment not found' });
       }
@@ -196,11 +199,10 @@ export function registerPaymentRoutes(app: FastifyInstance, authService: AuthSer
         },
       },
     },
-    async (
-      request: FastifyRequest<{ Params: { id: string }; Body: { amount?: number } }>,
-      reply: FastifyReply
-    ) => {
-      const payment = await paymentService.refundPayment(request.params.id, request.body.amount);
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const params = request.params as { id: string };
+      const body = request.body as { amount?: number };
+      const payment = await paymentService.refundPayment(params.id, body.amount);
       return reply.send({ success: true, data: payment });
     }
   );
@@ -228,15 +230,13 @@ export function registerPaymentRoutes(app: FastifyInstance, authService: AuthSer
         },
       },
     },
-    async (
-      request: FastifyRequest<{ Body: { planId: string; provider?: PaymentProvider } }>,
-      reply: FastifyReply
-    ) => {
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = (request as FastifyRequest & { user: { id: string } }).user.id;
+      const body = request.body as { planId: string; provider?: PaymentProvider };
       const subscription = await paymentService.createSubscription(
         userId,
-        request.body.planId,
-        request.body.provider
+        body.planId,
+        body.provider
       );
       return reply.status(201).send({ success: true, data: subscription });
     }
@@ -261,8 +261,9 @@ export function registerPaymentRoutes(app: FastifyInstance, authService: AuthSer
         },
       },
     },
-    async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-      const subscription = await paymentService.cancelSubscription(request.params.id);
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const params = request.params as { id: string };
+      const subscription = await paymentService.cancelSubscription(params.id);
       return reply.send({ success: true, data: subscription });
     }
   );
@@ -341,7 +342,7 @@ export function registerPaymentRoutes(app: FastifyInstance, authService: AuthSer
           200: { type: 'object', properties: { received: { type: 'boolean' } } },
         },
       },
-      config: { rawBody: true },
+      config: { rawBody: true } as Record<string, unknown>,
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const signature = request.headers['stripe-signature'] as string;

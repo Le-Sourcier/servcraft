@@ -60,7 +60,13 @@ export function createMediaProcessingRoutes(mediaService: MediaProcessingService
    * GET /jobs/:id
    */
   router.get('/jobs/:id', async (req: Request, res: Response) => {
-    const job = await mediaService.getJob(req.params.id);
+    const jobId = req.params.id;
+    if (!jobId) {
+      res.status(400).json({ error: 'Job ID is required' });
+      return;
+    }
+
+    const job = await mediaService.getJob(jobId);
 
     if (!job) {
       res.status(404).json({ error: 'Job not found' });

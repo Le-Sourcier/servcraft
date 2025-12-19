@@ -32,7 +32,7 @@ export class RedisStore implements RateLimitStore {
       const entry = JSON.parse(data) as RateLimitEntry;
 
       // Check if expired
-      if (entry.resetAt < Date.now()) {
+      if (entry.resetAt && entry.resetAt < Date.now()) {
         await this.delete(key);
         return null;
       }
@@ -44,9 +44,10 @@ export class RedisStore implements RateLimitStore {
     }
   }
 
-  async set(key: string, entry: RateLimitEntry): Promise<void> {
+  async set(key: string, entry: RateLimitEntry, ttlMs?: number): Promise<void> {
     try {
-      const ttl = Math.ceil((entry.resetAt - Date.now()) / 1000);
+      const resetAt = entry.resetAt ?? Date.now() + (ttlMs ?? 60000);
+      const ttl = Math.ceil((resetAt - Date.now()) / 1000);
       if (ttl <= 0) return;
 
       await this.client.setex(this.getKey(key), ttl, JSON.stringify(entry));
@@ -55,22 +56,36 @@ export class RedisStore implements RateLimitStore {
     }
   }
 
-  async increment(key: string): Promise<number> {
+  async increment(key: string, windowMs: number): Promise<RateLimitEntry> {
     try {
       const current = await this.get(key);
+      const now = Date.now();
 
       if (!current) {
-        return 0;
+        const entry: RateLimitEntry = {
+          count: 1,
+          startTime: now,
+          resetAt: now + windowMs,
+          firstRequest: now,
+          lastRequest: now,
+        };
+        await this.set(key, entry, windowMs);
+        return entry;
       }
 
       current.count++;
-      current.lastRequest = Date.now();
+      current.lastRequest = now;
       await this.set(key, current);
 
-      return current.count;
+      return current;
     } catch (error) {
       console.error('[RedisStore] Error incrementing:', error);
-      return 0;
+      const now = Date.now();
+      return {
+        count: 0,
+        startTime: now,
+        resetAt: now + windowMs,
+      };
     }
   }
 

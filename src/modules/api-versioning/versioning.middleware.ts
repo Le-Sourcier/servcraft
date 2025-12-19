@@ -26,7 +26,11 @@ export function createVersioningMiddleware(
     const versionedReq = req as VersionedRequest;
 
     // Detect version
-    const detection = versioningService.detectVersion(req);
+    const detection = versioningService.detectVersion({
+      url: req.url,
+      headers: req.headers as Record<string, string | string[] | undefined>,
+      query: req.query as Record<string, string | string[] | undefined>,
+    });
 
     versionedReq.apiVersion = detection.version;
     versionedReq.versionInfo = detection;

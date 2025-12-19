@@ -146,8 +146,20 @@ export function parseField(fieldStr: string): FieldDefinition {
 
   // Validate type
   const validTypes: FieldType[] = [
-    'string', 'number', 'boolean', 'date', 'datetime',
-    'text', 'json', 'email', 'url', 'uuid', 'int', 'float', 'decimal', 'enum'
+    'string',
+    'number',
+    'boolean',
+    'date',
+    'datetime',
+    'text',
+    'json',
+    'email',
+    'url',
+    'uuid',
+    'int',
+    'float',
+    'decimal',
+    'enum',
   ];
 
   let type: FieldType = 'string';
@@ -192,10 +204,7 @@ export function parseField(fieldStr: string): FieldDefinition {
 export function parseFields(fieldsStr: string): FieldDefinition[] {
   if (!fieldsStr) return [];
 
-  return fieldsStr
-    .split(/\s+/)
-    .filter(Boolean)
-    .map(parseField);
+  return fieldsStr.split(/\s+/).filter(Boolean).map(parseField);
 }
 
 /**
@@ -303,7 +312,7 @@ export function generatePrismaModel(
   lines.push('');
 
   // Add indexes for unique fields
-  const uniqueFields = fields.filter(f => f.isUnique);
+  const uniqueFields = fields.filter((f) => f.isUnique);
   for (const field of uniqueFields) {
     lines.push(`  @@index([${field.name}])`);
   }

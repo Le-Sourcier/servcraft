@@ -226,17 +226,19 @@ export class AnalyticsService {
           aggregated = values[values.length - 1] || 0;
       }
 
+      const lastMetric = metrics[metrics.length - 1];
       return {
-        timestamp: metrics[metrics.length - 1].timestamp,
+        timestamp: lastMetric?.timestamp ?? new Date(),
         value: aggregated,
-        labels: metrics[metrics.length - 1].labels,
+        labels: lastMetric?.labels ?? {},
       };
     });
 
+    const lastDataPoint = data[data.length - 1];
     return {
       name: query.name,
       data,
-      aggregated: data.length > 0 ? data[data.length - 1].value : 0,
+      aggregated: lastDataPoint?.value ?? 0,
     };
   }
 

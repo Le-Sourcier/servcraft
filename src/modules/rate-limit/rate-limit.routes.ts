@@ -13,16 +13,24 @@ export function createRateLimitRoutes(service: RateLimitService): Router {
    * GET /rate-limit/info/:key
    * Get rate limit info for a specific key
    */
-  router.get('/info/:key', async (req: Request, res: Response) => {
+  router.get('/info/:key', async (req: Request, res: Response): Promise<void> => {
     try {
-      const { key } = req.params;
+      const key = req.params.key;
+      if (!key) {
+        res.status(400).json({
+          error: 'Bad Request',
+          message: 'Key is required',
+        });
+        return;
+      }
       const info = await service.getInfo(key);
 
       if (!info) {
-        return res.status(404).json({
+        res.status(404).json({
           error: 'Not Found',
           message: 'No rate limit data found for this key',
         });
+        return;
       }
 
       res.json({
@@ -42,9 +50,16 @@ export function createRateLimitRoutes(service: RateLimitService): Router {
    * POST /rate-limit/reset/:key
    * Reset rate limit for a specific key
    */
-  router.post('/reset/:key', async (req: Request, res: Response) => {
+  router.post('/reset/:key', async (req: Request, res: Response): Promise<void> => {
     try {
-      const { key } = req.params;
+      const key = req.params.key;
+      if (!key) {
+        res.status(400).json({
+          error: 'Bad Request',
+          message: 'Key is required',
+        });
+        return;
+      }
       await service.reset(key);
 
       res.json({
@@ -92,15 +107,16 @@ export function createRateLimitRoutes(service: RateLimitService): Router {
    * POST /rate-limit/whitelist
    * Add IP to whitelist
    */
-  router.post('/whitelist', async (req: Request, res: Response) => {
+  router.post('/whitelist', async (req: Request, res: Response): Promise<void> => {
     try {
-      const { ip } = req.body;
+      const { ip } = req.body as { ip?: string };
 
       if (!ip) {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: 'IP address is required',
         });
+        return;
       }
 
       service.addToWhitelist(ip);
@@ -122,9 +138,16 @@ export function createRateLimitRoutes(service: RateLimitService): Router {
    * DELETE /rate-limit/whitelist/:ip
    * Remove IP from whitelist
    */
-  router.delete('/whitelist/:ip', async (req: Request, res: Response) => {
+  router.delete('/whitelist/:ip', async (req: Request, res: Response): Promise<void> => {
     try {
-      const { ip } = req.params;
+      const ip = req.params.ip;
+      if (!ip) {
+        res.status(400).json({
+          error: 'Bad Request',
+          message: 'IP is required',
+        });
+        return;
+      }
       service.removeFromWhitelist(ip);
 
       res.json({
@@ -144,15 +167,16 @@ export function createRateLimitRoutes(service: RateLimitService): Router {
    * POST /rate-limit/blacklist
    * Add IP to blacklist
    */
-  router.post('/blacklist', async (req: Request, res: Response) => {
+  router.post('/blacklist', async (req: Request, res: Response): Promise<void> => {
     try {
-      const { ip } = req.body;
+      const { ip } = req.body as { ip?: string };
 
       if (!ip) {
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Bad Request',
           message: 'IP address is required',
         });
+        return;
       }
 
       service.addToBlacklist(ip);
@@ -174,9 +198,16 @@ export function createRateLimitRoutes(service: RateLimitService): Router {
    * DELETE /rate-limit/blacklist/:ip
    * Remove IP from blacklist
    */
-  router.delete('/blacklist/:ip', async (req: Request, res: Response) => {
+  router.delete('/blacklist/:ip', async (req: Request, res: Response): Promise<void> => {
     try {
-      const { ip } = req.params;
+      const ip = req.params.ip;
+      if (!ip) {
+        res.status(400).json({
+          error: 'Bad Request',
+          message: 'IP is required',
+        });
+        return;
+      }
       service.removeFromBlacklist(ip);
 
       res.json({

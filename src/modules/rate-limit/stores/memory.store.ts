@@ -10,7 +10,7 @@ export class MemoryStore implements RateLimitStore {
 
   constructor(cleanupIntervalMs = 60000) {
     // Periodic cleanup of expired entries
-    this.cleanupInterval = setInterval(() => this.cleanup(), cleanupIntervalMs);
+    this.cleanupInterval = setInterval(() => void this.cleanup(), cleanupIntervalMs);
   }
 
   async get(key: string): Promise<RateLimitEntry | null> {
@@ -148,7 +148,7 @@ export class MemoryStore implements RateLimitStore {
     }
   }
 
-  private cleanup(): void {
+  async cleanup(): Promise<void> {
     const now = Date.now();
     for (const [key, entry] of this.store.entries()) {
       // Default TTL of 1 hour for cleanup

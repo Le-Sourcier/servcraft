@@ -10,7 +10,7 @@ import type {
   BulkIndexResult,
   IndexStats,
   AutocompleteResult,
-  SearchEngine as ISearchEngine,
+  SearchEngine,
 } from './types.js';
 import { MemorySearchAdapter } from './adapters/memory.adapter.js';
 
@@ -19,10 +19,10 @@ import { MemorySearchAdapter } from './adapters/memory.adapter.js';
  * Unified interface for Elasticsearch, Meilisearch, or in-memory search
  */
 export class SearchService {
-  private engine: ISearchEngine;
+  private engine: SearchEngine;
   private config: SearchConfig;
 
-  constructor(config?: SearchConfig, engine?: ISearchEngine) {
+  constructor(config?: SearchConfig, engine?: SearchEngine) {
     this.config = config || {};
     this.engine = engine || new MemorySearchAdapter();
 

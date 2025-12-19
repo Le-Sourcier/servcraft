@@ -11,7 +11,6 @@ import {
   writeFile,
   success,
   error,
-  warn,
   info,
   getModulesDir,
 } from '../utils/helpers.js';
@@ -36,7 +35,9 @@ export const generateCommand = new Command('generate')
 generateCommand
   .command('module <name> [fields...]')
   .alias('m')
-  .description('Generate a complete module with controller, service, repository, types, schemas, and routes')
+  .description(
+    'Generate a complete module with controller, service, repository, types, schemas, and routes'
+  )
   .option('--no-routes', 'Skip routes generation')
   .option('--no-repository', 'Skip repository generation')
   .option('--prisma', 'Generate Prisma model suggestion')
@@ -87,8 +88,14 @@ generateCommand
             ? dynamicSchemasTemplate(kebabName, pascalName, camelName, fields, validatorType)
             : schemasTemplate(kebabName, pascalName, camelName),
         },
-        { name: `${kebabName}.service.ts`, content: serviceTemplate(kebabName, pascalName, camelName) },
-        { name: `${kebabName}.controller.ts`, content: controllerTemplate(kebabName, pascalName, camelName) },
+        {
+          name: `${kebabName}.service.ts`,
+          content: serviceTemplate(kebabName, pascalName, camelName),
+        },
+        {
+          name: `${kebabName}.controller.ts`,
+          content: controllerTemplate(kebabName, pascalName, camelName),
+        },
         { name: 'index.ts', content: moduleIndexTemplate(kebabName, pascalName, camelName) },
       ];
 

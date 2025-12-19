@@ -6,6 +6,14 @@ import { parsePaginationParams } from '../../utils/pagination.js';
 import { validateBody, validateQuery } from '../validation/validator.js';
 import type { AuthenticatedRequest } from '../auth/types.js';
 import { ForbiddenError } from '../../utils/errors.js';
+import type { User } from './types.js';
+
+// Helper to remove password from user object
+function omitPassword(user: User): Omit<User, 'password'> {
+  const { password, ...userData } = user;
+  void password; // Explicitly mark as intentionally unused
+  return userData;
+}
 
 export class UserController {
   constructor(private userService: UserService) {}
@@ -39,8 +47,7 @@ export class UserController {
     }
 
     // Remove password from response
-    const { password, ...userData } = user;
-    success(reply, userData);
+    success(reply, omitPassword(user));
   }
 
   async update(
@@ -50,8 +57,7 @@ export class UserController {
     const data = validateBody(updateUserSchema, request.body);
     const user = await this.userService.update(request.params.id, data);
 
-    const { password, ...userData } = user;
-    success(reply, userData);
+    success(reply, omitPassword(user));
   }
 
   async delete(
@@ -80,7 +86,7 @@ export class UserController {
     }
 
     const user = await this.userService.suspend(request.params.id);
-    const { password, ...userData } = user;
+    const userData = omitPassword(user);
     success(reply, userData);
   }
 
@@ -95,7 +101,7 @@ export class UserController {
     }
 
     const user = await this.userService.ban(request.params.id);
-    const { password, ...userData } = user;
+    const userData = omitPassword(user);
     success(reply, userData);
   }
 
@@ -104,7 +110,7 @@ export class UserController {
     reply: FastifyReply
   ): Promise<void> {
     const user = await this.userService.activate(request.params.id);
-    const { password, ...userData } = user;
+    const userData = omitPassword(user);
     success(reply, userData);
   }
 
@@ -120,7 +126,7 @@ export class UserController {
       });
     }
 
-    const { password, ...userData } = user;
+    const userData = omitPassword(user);
     success(reply, userData);
   }
 
@@ -129,7 +135,7 @@ export class UserController {
     const data = validateBody(updateProfileSchema, request.body);
 
     const user = await this.userService.update(authRequest.user.id, data);
-    const { password, ...userData } = user;
+    const userData = omitPassword(user);
     success(reply, userData);
   }
 }

@@ -163,10 +163,7 @@ for (const [name, template] of Object.entries(templates)) {
   compiledTemplates[name] = Handlebars.compile(template);
 }
 
-export function renderTemplate(
-  templateName: string,
-  data: Record<string, unknown>
-): string {
+export function renderTemplate(templateName: string, data: Record<string, unknown>): string {
   const template = compiledTemplates[templateName];
 
   if (!template) {
@@ -183,10 +180,7 @@ export function renderTemplate(
   });
 }
 
-export function renderCustomTemplate(
-  htmlTemplate: string,
-  data: Record<string, unknown>
-): string {
+export function renderCustomTemplate(htmlTemplate: string, data: Record<string, unknown>): string {
   const template = Handlebars.compile(htmlTemplate);
   const body = template(data);
 

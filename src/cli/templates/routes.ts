@@ -1,4 +1,9 @@
-export function routesTemplate(name: string, pascalName: string, camelName: string, pluralName: string): string {
+export function routesTemplate(
+  name: string,
+  pascalName: string,
+  camelName: string,
+  pluralName: string
+): string {
   return `import type { FastifyInstance } from 'fastify';
 import type { ${pascalName}Controller } from './${name}.controller.js';
 import type { AuthService } from '../auth/auth.service.js';

@@ -153,7 +153,10 @@ export class MemorySearchAdapter implements SearchEngine {
 
           if (aVal === bVal) continue;
 
-          const comparison = aVal > bVal ? 1 : -1;
+          // Compare values handling different types
+          const aNum = typeof aVal === 'number' ? aVal : String(aVal ?? '');
+          const bNum = typeof bVal === 'number' ? bVal : String(bVal ?? '');
+          const comparison = aNum > bNum ? 1 : -1;
           return sort.direction === 'asc' ? comparison : -comparison;
         }
         return 0;

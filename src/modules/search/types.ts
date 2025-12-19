@@ -1,8 +1,8 @@
-export type SearchEngine = 'elasticsearch' | 'meilisearch' | 'memory';
+export type SearchEngineType = 'elasticsearch' | 'meilisearch' | 'memory';
 
 export interface SearchConfig {
   /** Search engine to use */
-  engine?: SearchEngine;
+  engine?: SearchEngineType;
   /** Elasticsearch config */
   elasticsearch?: {
     node: string;

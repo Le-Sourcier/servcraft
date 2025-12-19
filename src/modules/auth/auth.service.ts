@@ -2,14 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { config } from '../../config/index.js';
 import { logger } from '../../core/logger.js';
-import {
-  UnauthorizedError,
-  BadRequestError,
-  ConflictError,
-  NotFoundError,
-} from '../../utils/errors.js';
+import { UnauthorizedError } from '../../utils/errors.js';
 import type { TokenPair, JwtPayload, AuthUser } from './types.js';
-import type { LoginInput, RegisterInput, ChangePasswordInput } from './schemas.js';
 
 // Token blacklist (in production, use Redis)
 const tokenBlacklist = new Set<string>();
@@ -134,6 +128,44 @@ export class AuthService {
     // In production, this should be handled by Redis TTL
     tokenBlacklist.clear();
     logger.debug('Token blacklist cleared');
+  }
+
+  // OAuth support methods - to be implemented with user repository
+  async findUserByEmail(_email: string): Promise<AuthUser | null> {
+    // In production, query the user repository
+    return null;
+  }
+
+  async createUserFromOAuth(data: {
+    email: string;
+    name?: string;
+    picture?: string;
+    emailVerified?: boolean;
+  }): Promise<AuthUser> {
+    // In production, create user in database
+    const user: AuthUser = {
+      id: `oauth_${Date.now()}`,
+      email: data.email,
+      role: 'user',
+    };
+    logger.info({ email: data.email }, 'Created user from OAuth');
+    return user;
+  }
+
+  async generateTokensForUser(userId: string): Promise<TokenPair> {
+    // Generate tokens for a user by ID
+    const user: AuthUser = {
+      id: userId,
+      email: '', // Would be fetched from database in production
+      role: 'user',
+    };
+    return this.generateTokenPair(user);
+  }
+
+  async verifyPasswordById(userId: string, _password: string): Promise<boolean> {
+    // In production, verify password against stored hash
+    logger.debug({ userId }, 'Password verification requested');
+    return false;
   }
 }
 

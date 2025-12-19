@@ -25,6 +25,8 @@ export interface RateLimitConfig {
   message?: string | ((info: RateLimitInfo) => string);
   /** Status code when rate limited (default: 429) */
   statusCode?: number;
+  /** Custom limits per route/IP */
+  customLimits?: Record<string, { max: number; windowMs: number }>;
 }
 
 export interface RateLimitRule {
@@ -64,13 +66,21 @@ export interface RateLimitInfo {
   /** Remaining requests in current window */
   remaining: number;
   /** Time when the rate limit resets (Unix timestamp) */
-  resetTime: number;
+  resetAt?: number;
+  /** Time when the rate limit resets (Unix timestamp) - alias */
+  resetTime?: number;
   /** Milliseconds until reset */
-  retryAfter: number;
+  retryAfter?: number;
   /** Whether limit is exceeded */
-  exceeded: boolean;
+  exceeded?: boolean;
   /** Current request count */
-  current: number;
+  current?: number;
+  /** Request count */
+  count?: number;
+  /** First request time */
+  firstRequest?: number;
+  /** Last request time */
+  lastRequest?: number;
 }
 
 export interface RateLimitEntry {
@@ -84,19 +94,40 @@ export interface RateLimitEntry {
   tokens?: number;
   /** Last refill time for token bucket */
   lastRefill?: number;
+  /** Reset time */
+  resetAt?: number;
+  /** Last request time */
+  lastRequest?: number;
+  /** First request time */
+  firstRequest?: number;
+}
+
+export interface RateLimitResult {
+  /** Whether the request is allowed */
+  allowed: boolean;
+  /** Total requests allowed */
+  limit: number;
+  /** Remaining requests in current window */
+  remaining: number;
+  /** Time when the rate limit resets (Unix timestamp) */
+  resetAt: number;
+  /** Seconds until reset (optional, only when rate limited) */
+  retryAfter?: number;
 }
 
 export interface RateLimitStore {
   /** Get rate limit entry */
   get(key: string): Promise<RateLimitEntry | null>;
   /** Set rate limit entry */
-  set(key: string, entry: RateLimitEntry, ttlMs: number): Promise<void>;
+  set(key: string, entry: RateLimitEntry, ttlMs?: number): Promise<void>;
   /** Increment counter and return new value */
   increment(key: string, windowMs: number): Promise<RateLimitEntry>;
   /** Reset a key */
   reset(key: string): Promise<void>;
   /** Clear all entries */
   clear(): Promise<void>;
+  /** Cleanup expired entries (optional) */
+  cleanup?(): Promise<void>;
 }
 
 export interface BlacklistEntry {

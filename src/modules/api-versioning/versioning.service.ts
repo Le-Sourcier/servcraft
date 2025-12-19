@@ -152,7 +152,7 @@ export class VersioningService {
    */
   private detectFromUrl(url: string): string | null {
     const match = url.match(/\/(v\d+)\//);
-    return match ? match[1] : null;
+    return match?.[1] ?? null;
   }
 
   /**
@@ -160,7 +160,7 @@ export class VersioningService {
    */
   private detectFromHeader(headers: Record<string, string | string[] | undefined>): string | null {
     const headerValue = headers[this.config.headerName?.toLowerCase() || 'x-api-version'];
-    return Array.isArray(headerValue) ? headerValue[0] : headerValue || null;
+    return Array.isArray(headerValue) ? (headerValue[0] ?? null) : (headerValue ?? null);
   }
 
   /**
@@ -168,7 +168,7 @@ export class VersioningService {
    */
   private detectFromQuery(query: Record<string, string | string[] | undefined>): string | null {
     const queryValue = query[this.config.queryParam || 'version'];
-    return Array.isArray(queryValue) ? queryValue[0] : queryValue || null;
+    return Array.isArray(queryValue) ? (queryValue[0] ?? null) : (queryValue ?? null);
   }
 
   /**

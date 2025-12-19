@@ -1,4 +1,4 @@
-import { Server, createServer } from './core/server.js';
+import { createServer } from './core/server.js';
 import { logger } from './core/logger.js';
 import { config } from './config/index.js';
 import { registerSecurity, registerErrorHandler } from './middleware/index.js';
@@ -25,10 +25,13 @@ async function bootstrap(): Promise<void> {
   // Start server
   await server.start();
 
-  logger.info({
-    env: config.env.NODE_ENV,
-    port: config.server.port,
-  }, 'Servcraft server started');
+  logger.info(
+    {
+      env: config.env.NODE_ENV,
+      port: config.server.port,
+    },
+    'Servcraft server started'
+  );
 }
 
 bootstrap().catch((err) => {
