@@ -494,6 +494,37 @@ export class EnvManager {
           ],
         },
       ],
+      'feature-flag': [
+        {
+          title: 'Feature Flags Configuration',
+          variables: [
+            {
+              key: 'FEATURE_FLAGS_ENABLED',
+              value: 'true',
+              comment: 'Enable feature flags',
+              required: true,
+            },
+            {
+              key: 'FEATURE_FLAGS_ENVIRONMENT',
+              value: 'development',
+              comment: 'Feature flags environment: development, staging, production, test',
+              required: true,
+            },
+            {
+              key: 'FEATURE_FLAGS_ANALYTICS',
+              value: 'true',
+              comment: 'Enable feature flag analytics',
+              required: true,
+            },
+            {
+              key: 'FEATURE_FLAGS_CACHE_TTL',
+              value: '300',
+              comment: 'Cache TTL in seconds',
+              required: true,
+            },
+          ],
+        },
+      ],
       upload: [
         {
           title: 'File Upload Configuration',
