@@ -80,10 +80,10 @@ export const initCommand = new Command('init')
             name: 'database',
             message: 'Select database:',
             choices: [
-              { name: 'PostgreSQL (Recommended)', value: 'postgresql' },
+              { name: 'PostgreSQL (Recommended for SQL)', value: 'postgresql' },
               { name: 'MySQL', value: 'mysql' },
               { name: 'SQLite (Development)', value: 'sqlite' },
-              { name: 'MongoDB (with Mongoose)', value: 'mongodb' },
+              { name: 'MongoDB (NoSQL)', value: 'mongodb' },
               { name: 'None (Add later)', value: 'none' },
             ],
             default: 'postgresql',
