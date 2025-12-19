@@ -1,5 +1,9 @@
 import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
+import { Server } from 'socket.io';
+import type { Server as HTTPServer } from 'http';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { Redis } from 'ioredis';
 import { logger } from '../../core/logger.js';
 import type {
   WebSocketConfig,
@@ -22,12 +26,13 @@ const userSockets = new Map<string, Set<string>>();
  * WebSocket Service
  * Manages real-time connections with Socket.io
  *
- * Note: This is a simplified implementation.
- * For production, integrate with Socket.io and use Redis adapter for scaling.
+ * Now using real Socket.io with Redis adapter for multi-instance support.
  */
 export class WebSocketService extends EventEmitter {
   private config: WebSocketConfig;
-  private io: unknown | null = null;
+  private io: Server | null = null;
+  private pubClient: Redis | null = null;
+  private subClient: Redis | null = null;
   private stats: ConnectionStats = {
     totalConnections: 0,
     activeConnections: 0,
@@ -52,14 +57,188 @@ export class WebSocketService extends EventEmitter {
 
   /**
    * Initialize Socket.io server
-   * In production, pass an HTTP server instance
+   * Pass an HTTP server instance to enable WebSocket support
    */
-  initialize(_httpServer?: unknown): void {
-    // Mock initialization
-    // In production: this.io = new Server(_httpServer, this.config);
-    this.io = { initialized: true };
+  initialize(httpServer?: HTTPServer): void {
+    if (!httpServer) {
+      logger.warn('No HTTP server provided - WebSocket service running in mock mode');
+      return;
+    }
 
-    logger.info('WebSocket server initialized');
+    try {
+      // Create Socket.io server
+      this.io = new Server(httpServer, {
+        path: this.config.path,
+        pingTimeout: this.config.pingTimeout,
+        pingInterval: this.config.pingInterval,
+        maxHttpBufferSize: this.config.maxHttpBufferSize,
+        cors: this.config.cors || {
+          origin: '*',
+          credentials: true,
+        },
+      });
+
+      // Setup Redis adapter if configured
+      if (this.config.redis) {
+        this.setupRedisAdapter();
+      }
+
+      // Setup connection handlers
+      this.setupConnectionHandlers();
+
+      logger.info({ path: this.config.path }, 'Socket.io server initialized');
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to initialize Socket.io server');
+      throw error;
+    }
+  }
+
+  /**
+   * Setup Redis adapter for multi-instance support
+   */
+  private setupRedisAdapter(): void {
+    if (!this.config.redis || !this.io) {
+      return;
+    }
+
+    try {
+      const redisConfig = this.config.redis;
+
+      // Create pub/sub Redis clients
+      this.pubClient = new Redis({
+        host: redisConfig.host,
+        port: redisConfig.port,
+        password: redisConfig.password,
+      });
+
+      this.subClient = new Redis({
+        host: redisConfig.host,
+        port: redisConfig.port,
+        password: redisConfig.password,
+      });
+
+      // Setup event handlers
+      this.pubClient.on('connect', () => {
+        logger.info('Socket.io Redis pub client connected');
+      });
+
+      this.pubClient.on('error', (error: Error) => {
+        logger.error({ err: error }, 'Socket.io Redis pub client error');
+      });
+
+      this.subClient.on('connect', () => {
+        logger.info('Socket.io Redis sub client connected');
+      });
+
+      this.subClient.on('error', (error: Error) => {
+        logger.error({ err: error }, 'Socket.io Redis sub client error');
+      });
+
+      // Attach Redis adapter to Socket.io
+      this.io.adapter(createAdapter(this.pubClient, this.subClient));
+
+      logger.info(
+        { host: redisConfig.host, port: redisConfig.port },
+        'Socket.io Redis adapter configured'
+      );
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to setup Redis adapter');
+    }
+  }
+
+  /**
+   * Setup Socket.io connection handlers
+   */
+  private setupConnectionHandlers(): void {
+    if (!this.io) {
+      return;
+    }
+
+    this.io.on('connection', (socket) => {
+      const authenticatedSocket = socket as unknown as AuthenticatedSocket;
+
+      // Handle connection
+      this.handleConnection(authenticatedSocket).catch((error) => {
+        logger.error({ err: error, socketId: socket.id }, 'Error handling connection');
+      });
+
+      // Handle disconnection
+      socket.on('disconnect', (reason) => {
+        this.handleDisconnection(socket.id, reason).catch((error) => {
+          logger.error({ err: error, socketId: socket.id }, 'Error handling disconnection');
+        });
+      });
+
+      // Handle room join
+      socket.on('room:join', async (data: { roomId: string }) => {
+        try {
+          await this.joinRoom(socket.id, data.roomId);
+          socket.join(data.roomId);
+        } catch (error) {
+          logger.error({ err: error, socketId: socket.id }, 'Error joining room');
+          socket.emit('error', { message: 'Failed to join room' });
+        }
+      });
+
+      // Handle room leave
+      socket.on('room:leave', async (data: { roomId: string }) => {
+        try {
+          await this.leaveRoom(socket.id, data.roomId);
+          socket.leave(data.roomId);
+        } catch (error) {
+          logger.error({ err: error, socketId: socket.id }, 'Error leaving room');
+        }
+      });
+
+      // Handle message
+      socket.on(
+        'message',
+        async (data: {
+          roomId: string;
+          content: string;
+          type?: Message['type'];
+          metadata?: Record<string, unknown>;
+        }) => {
+          try {
+            const user = this.getUser(socket.id);
+            if (!user) {
+              socket.emit('error', { message: 'User not found' });
+              return;
+            }
+
+            const message = await this.sendMessage(
+              data.roomId,
+              user.id,
+              data.content,
+              data.type,
+              data.metadata
+            );
+
+            // Broadcast to room
+            this.io?.to(data.roomId).emit('message', message);
+          } catch (error) {
+            logger.error({ err: error, socketId: socket.id }, 'Error sending message');
+            socket.emit('error', { message: 'Failed to send message' });
+          }
+        }
+      );
+
+      // Handle typing indicator
+      socket.on('typing', (data: { roomId: string; isTyping: boolean }) => {
+        const user = this.getUser(socket.id);
+        if (user) {
+          socket.to(data.roomId).emit('typing', {
+            userId: user.id,
+            username: user.username,
+            roomId: data.roomId,
+            isTyping: data.isTyping,
+            timestamp: new Date(),
+          });
+        }
+      });
+    });
+
+    logger.info('Socket.io connection handlers configured');
   }
 
   /**
@@ -319,7 +498,7 @@ export class WebSocketService extends EventEmitter {
   async broadcastToRoom(
     roomId: string,
     event: string,
-    _data: unknown,
+    data: unknown,
     options?: BroadcastOptions
   ): Promise<void> {
     const room = rooms.get(roomId);
@@ -328,58 +507,87 @@ export class WebSocketService extends EventEmitter {
       throw new Error('Room not found');
     }
 
-    const except = new Set(options?.except || []);
-
-    for (const socketId of room.members) {
-      if (!except.has(socketId)) {
-        // In production: io.to(socketId).emit(event, data);
-        logger.debug({ socketId, event, roomId }, 'Broadcasting to socket');
+    if (this.io) {
+      // Use Socket.io room broadcasting
+      const except = options?.except || [];
+      if (except.length > 0) {
+        // Emit to room except specific sockets
+        for (const socketId of room.members) {
+          if (!except.includes(socketId)) {
+            this.io.to(socketId).emit(event, data);
+          }
+        }
+      } else {
+        // Emit to entire room
+        this.io.to(roomId).emit(event, data);
       }
-    }
 
-    logger.debug({ event, roomId, memberCount: room.members.size }, 'Broadcast to room');
+      logger.debug({ event, roomId, memberCount: room.members.size }, 'Broadcast to room');
+    } else {
+      logger.debug({ event, roomId }, 'WebSocket not initialized - skipping broadcast');
+    }
   }
 
   /**
    * Broadcast to specific users
    */
-  async broadcastToUsers(userIds: string[], event: string, _data: unknown): Promise<void> {
-    for (const userId of userIds) {
-      const socketIds = userSockets.get(userId);
+  async broadcastToUsers(userIds: string[], event: string, data: unknown): Promise<void> {
+    if (this.io) {
+      for (const userId of userIds) {
+        const socketIds = userSockets.get(userId);
 
-      if (socketIds) {
-        for (const socketId of socketIds) {
-          // In production: io.to(socketId).emit(event, data);
-          logger.debug({ socketId, userId, event }, 'Broadcasting to user');
+        if (socketIds) {
+          for (const socketId of socketIds) {
+            this.io.to(socketId).emit(event, data);
+            logger.debug({ socketId, userId, event }, 'Broadcasting to user');
+          }
         }
       }
-    }
 
-    logger.debug({ event, userCount: userIds.length }, 'Broadcast to users');
+      logger.debug({ event, userCount: userIds.length }, 'Broadcast to users');
+    } else {
+      logger.debug(
+        { event, userCount: userIds.length },
+        'WebSocket not initialized - skipping broadcast'
+      );
+    }
   }
 
   /**
    * Broadcast to all connected users
    */
-  async broadcastToAll(event: string, _data: unknown, options?: BroadcastOptions): Promise<void> {
-    const except = new Set(options?.except || []);
+  async broadcastToAll(event: string, data: unknown, options?: BroadcastOptions): Promise<void> {
+    if (this.io) {
+      const except = options?.except || [];
 
-    for (const socketId of connectedUsers.keys()) {
-      if (!except.has(socketId)) {
-        // In production: io.to(socketId).emit(event, data);
-        logger.debug({ socketId, event }, 'Broadcasting to all');
+      if (except.length > 0) {
+        // Emit to all except specific sockets
+        for (const socketId of connectedUsers.keys()) {
+          if (!except.includes(socketId)) {
+            this.io.to(socketId).emit(event, data);
+          }
+        }
+      } else {
+        // Emit to all connected sockets
+        this.io.emit(event, data);
       }
-    }
 
-    logger.debug({ event, totalUsers: connectedUsers.size }, 'Broadcast to all users');
+      logger.debug({ event, totalUsers: connectedUsers.size }, 'Broadcast to all users');
+    } else {
+      logger.debug({ event }, 'WebSocket not initialized - skipping broadcast');
+    }
   }
 
   /**
    * Emit event to specific socket
    */
-  async emitToSocket(socketId: string, event: string, _data: unknown): Promise<void> {
-    // In production: io.to(socketId).emit(event, _data);
-    logger.debug({ socketId, event }, 'Emit to socket');
+  async emitToSocket(socketId: string, event: string, data: unknown): Promise<void> {
+    if (this.io) {
+      this.io.to(socketId).emit(event, data);
+      logger.debug({ socketId, event }, 'Emit to socket');
+    } else {
+      logger.debug({ socketId, event }, 'WebSocket not initialized - skipping emit');
+    }
   }
 
   /**
@@ -417,9 +625,12 @@ export class WebSocketService extends EventEmitter {
   async disconnectUser(userId: string, reason?: string): Promise<void> {
     const socketIds = userSockets.get(userId);
 
-    if (socketIds) {
+    if (socketIds && this.io) {
       for (const socketId of socketIds) {
-        // In production: io.sockets.sockets.get(socketId)?.disconnect(true);
+        const socket = this.io.sockets.sockets.get(socketId);
+        if (socket) {
+          socket.disconnect(true);
+        }
         await this.handleDisconnection(socketId, reason);
       }
     }
@@ -455,8 +666,26 @@ export class WebSocketService extends EventEmitter {
       await this.handleDisconnection(socketId, 'server_shutdown');
     }
 
-    // Close Socket.io
-    // In production: await this.io?.close();
+    // Close Redis clients
+    if (this.pubClient) {
+      await this.pubClient.quit();
+      this.pubClient = null;
+    }
+
+    if (this.subClient) {
+      await this.subClient.quit();
+      this.subClient = null;
+    }
+
+    // Close Socket.io server
+    if (this.io) {
+      await new Promise<void>((resolve) => {
+        this.io?.close(() => {
+          resolve();
+        });
+      });
+      this.io = null;
+    }
 
     logger.info('WebSocket service shut down');
   }
