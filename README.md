@@ -79,6 +79,7 @@ All services are available as importable modules in your code:
 | **Upload** | `import { UploadService } from './modules/upload'` | File uploads |
 | **Notifications** | `import { NotificationService } from './modules/notification'` | Send notifications |
 | **Search** | `import { SearchService, ElasticsearchAdapter } from './modules/search'` | Full-text search with Elasticsearch/Meilisearch |
+| **i18n** | `import { I18nService, createI18nMiddleware } from './modules/i18n'` | Multi-language support & localization |
 
 ### Common Integration Patterns
 
@@ -242,6 +243,7 @@ servcraft add webhook           # Outgoing webhooks
 servcraft add queue             # Background jobs & queues
 servcraft add websocket         # Real-time with Socket.io
 servcraft add search            # Elasticsearch/Meilisearch search
+servcraft add i18n              # Multi-language support
 servcraft add --list            # Show all modules
 ```
 
@@ -910,6 +912,231 @@ console.log({
 });
 ```
 
+### i18n/Localization
+
+Multi-language support with automatic locale detection and translation management:
+
+**Features:**
+- Multiple locale support
+- Automatic locale detection (query, cookie, header)
+- Translation loading from files or in-memory
+- Variable interpolation
+- Pluralization support
+- Date, number, currency formatting
+- Relative time formatting
+- Translation metadata & missing keys tracking
+- Nested translation keys
+- Namespace organization
+
+**Usage:**
+
+```typescript
+import {
+  I18nService,
+  createI18nMiddleware,
+  createI18nRoutes
+} from './modules/i18n';
+
+// Create service
+const i18nService = new I18nService({
+  defaultLocale: 'en',
+  supportedLocales: ['en', 'fr', 'es', 'de', 'ar', 'zh', 'ja'],
+  fallbackLocale: 'en',
+  translationsDir: './locales',
+  cache: true
+});
+
+// Load translations from files
+await i18nService.loadTranslations('en', 'common');
+await i18nService.loadTranslations('fr', 'common');
+
+// Or add translations programmatically
+i18nService.addTranslations({
+  locale: 'en',
+  namespace: 'common',
+  data: {
+    welcome: 'Welcome',
+    greeting: 'Hello, {{name}}!',
+    items: 'You have {{count}} item{s}',
+    user: {
+      profile: {
+        title: 'User Profile',
+        edit: 'Edit Profile'
+      }
+    }
+  }
+});
+
+// Apply middleware
+app.use(createI18nMiddleware(i18nService, {
+  queryParam: 'lang',
+  cookieName: 'locale',
+  detectFromHeader: true
+}));
+
+// Add routes
+app.use('/api/i18n', createI18nRoutes(i18nService));
+
+// Use in controllers
+app.get('/api/welcome', (req, res) => {
+  const message = req.t('welcome');
+  res.json({ message });
+});
+```
+
+**Translation Features:**
+
+```typescript
+// Simple translation
+i18nService.t('welcome', { locale: 'en' });
+// => 'Welcome'
+
+// Variable interpolation
+i18nService.t('greeting', {
+  locale: 'en',
+  variables: { name: 'John' }
+});
+// => 'Hello, John!'
+
+// Pluralization
+i18nService.t('items', {
+  locale: 'en',
+  count: 1,
+  variables: { count: 1 }
+});
+// => 'You have 1 item'
+
+i18nService.t('items', {
+  locale: 'en',
+  count: 5,
+  variables: { count: 5 }
+});
+// => 'You have 5 items'
+
+// Nested keys
+i18nService.t('user.profile.title', { locale: 'en' });
+// => 'User Profile'
+
+// With default value
+i18nService.t('missing.key', {
+  locale: 'en',
+  defaultValue: 'Fallback text'
+});
+// => 'Fallback text'
+```
+
+**Formatting:**
+
+```typescript
+// Date formatting
+i18nService.formatDate(new Date(), 'en', {
+  dateStyle: 'full',
+  timeStyle: 'short'
+});
+// => 'Monday, January 1, 2024 at 10:30 AM'
+
+// Number formatting
+i18nService.formatNumber(1234567.89, 'en', {
+  minimumFractionDigits: 2
+});
+// => '1,234,567.89'
+
+// Currency formatting
+i18nService.formatCurrency(99.99, 'en', 'USD');
+// => '$99.99'
+
+i18nService.formatCurrency(99.99, 'fr', 'EUR');
+// => '99,99 €'
+
+// Relative time
+i18nService.formatRelativeTime(new Date(Date.now() - 3600000), 'en');
+// => '1 hour ago'
+```
+
+**Locale Detection:**
+
+The middleware automatically detects locale from:
+1. Query parameter (?lang=fr)
+2. Cookie (locale=fr)
+3. Accept-Language header
+4. Default locale (fallback)
+
+```typescript
+// Detection result available in request
+app.get('/api/info', (req, res) => {
+  res.json({
+    locale: req.locale,
+    detection: req.localeDetection // { locale, source, confidence }
+  });
+});
+```
+
+**API Routes:**
+
+```
+GET    /i18n/locales                     List supported locales
+GET    /i18n/locale                      Get current locale
+POST   /i18n/locale                      Switch locale
+GET    /i18n/translations/:namespace     Get translations
+GET    /i18n/translations/:namespace/metadata  Get metadata
+GET    /i18n/translations/:namespace/missing   Get missing keys
+POST   /i18n/translate                   Translate a key
+POST   /i18n/cache/clear                 Clear cache
+```
+
+**Translation File Structure:**
+
+```
+locales/
+├── en/
+│   ├── common.json
+│   ├── errors.json
+│   └── emails.json
+├── fr/
+│   ├── common.json
+│   ├── errors.json
+│   └── emails.json
+└── es/
+    ├── common.json
+    ├── errors.json
+    └── emails.json
+```
+
+**common.json example:**
+
+```json
+{
+  "welcome": "Welcome",
+  "greeting": "Hello, {{name}}!",
+  "farewell": "Goodbye",
+  "nav": {
+    "home": "Home",
+    "about": "About",
+    "contact": "Contact"
+  },
+  "errors": {
+    "notFound": "Not found",
+    "serverError": "Server error"
+  }
+}
+```
+
+**Tracking Translation Progress:**
+
+```typescript
+// Get metadata
+const metadata = await i18nService.getTranslationMetadata('fr', 'common');
+console.log({
+  totalKeys: metadata.totalKeys,
+  translatedKeys: metadata.translatedKeys,
+  completionPercentage: metadata.completionPercentage
+});
+
+// Get missing translations
+const missing = i18nService.getMissingTranslations('en', 'fr', 'common');
+console.log('Missing keys:', missing);
+```
+
 ## Modules & Resources
 
 ServCraft includes these pre-built modules:
@@ -927,6 +1154,7 @@ ServCraft includes these pre-built modules:
 - ✅ **Queue/Jobs** - Background tasks, cron scheduling, 10+ workers
 - ✅ **Websockets/Real-time** - Chat, presence, notifications, live events
 - ✅ **Search** - Elasticsearch/Meilisearch full-text search
+- ✅ **i18n/Localization** - Multi-language support with 7+ locales
 - ✅ **File Upload** - Multi-provider support (local, S3, etc.)
 - ✅ **MFA/TOTP** - Two-factor authentication with QR codes
 - ✅ **OAuth** - Google, GitHub, Facebook, Twitter, Apple
@@ -934,7 +1162,6 @@ ServCraft includes these pre-built modules:
 - ✅ **Notifications** - Email, SMS, Push notifications
 
 ### Coming Soon
-- ⏳ **i18n/Localization** - Multi-language support
 - ⏳ **Feature Flags** - A/B testing, progressive rollout
 - ⏳ **Analytics/Metrics** - Prometheus, custom metrics
 - ⏳ **Media Processing** - Image/video processing with FFmpeg
