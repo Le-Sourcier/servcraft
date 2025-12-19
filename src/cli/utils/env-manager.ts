@@ -605,6 +605,111 @@ export class EnvManager {
           ],
         },
       ],
+      analytics: [
+        {
+          title: 'Analytics/Metrics Configuration',
+          variables: [
+            {
+              key: 'ANALYTICS_ENABLED',
+              value: 'true',
+              comment: 'Enable analytics and metrics collection',
+              required: true,
+            },
+            {
+              key: 'ANALYTICS_PREFIX',
+              value: 'app',
+              comment: 'Metrics prefix',
+              required: true,
+            },
+            {
+              key: 'PROMETHEUS_ENABLED',
+              value: 'true',
+              comment: 'Enable Prometheus metrics endpoint',
+              required: true,
+            },
+            {
+              key: 'METRICS_FLUSH_INTERVAL',
+              value: '60000',
+              comment: 'Metrics flush interval in milliseconds',
+              required: true,
+            },
+          ],
+        },
+      ],
+      'media-processing': [
+        {
+          title: 'Media Processing Configuration',
+          variables: [
+            {
+              key: 'FFMPEG_PATH',
+              value: 'ffmpeg',
+              comment: 'Path to FFmpeg binary',
+              required: true,
+            },
+            {
+              key: 'FFPROBE_PATH',
+              value: 'ffprobe',
+              comment: 'Path to FFprobe binary',
+              required: true,
+            },
+            {
+              key: 'MEDIA_TEMP_DIR',
+              value: './temp/media',
+              comment: 'Temporary directory for media processing',
+              required: true,
+            },
+            {
+              key: 'MEDIA_MAX_CONCURRENT',
+              value: '3',
+              comment: 'Maximum concurrent processing jobs',
+              required: true,
+            },
+            {
+              key: 'MEDIA_GPU_ACCELERATION',
+              value: 'false',
+              comment: 'Enable GPU acceleration (requires NVIDIA GPU)',
+              required: false,
+            },
+          ],
+        },
+      ],
+      'api-versioning': [
+        {
+          title: 'API Versioning Configuration',
+          variables: [
+            {
+              key: 'API_VERSION_STRATEGY',
+              value: 'url',
+              comment: 'Versioning strategy: url, header, query, accept-header',
+              required: true,
+            },
+            {
+              key: 'API_DEFAULT_VERSION',
+              value: 'v1',
+              comment: 'Default API version',
+              required: true,
+            },
+            {
+              key: 'API_VERSION_HEADER',
+              value: 'X-API-Version',
+              comment: 'Header name for version (if strategy is header)',
+              required: false,
+            },
+            {
+              key: 'API_VERSION_STRICT',
+              value: 'true',
+              comment: 'Strict mode - reject unknown versions',
+              required: true,
+            },
+            {
+              key: 'API_DEPRECATION_WARNINGS',
+              value: 'true',
+              comment: 'Show deprecation warnings in headers',
+              required: true,
+            },
+          ],
+        },
+      ],
     };
 
     return moduleEnvMap[moduleName] || [];

@@ -81,6 +81,9 @@ All services are available as importable modules in your code:
 | **Search** | `import { SearchService, ElasticsearchAdapter } from './modules/search'` | Full-text search with Elasticsearch/Meilisearch |
 | **i18n** | `import { I18nService, createI18nMiddleware } from './modules/i18n'` | Multi-language support & localization |
 | **Feature Flags** | `import { FeatureFlagService, createFeatureFlagRoutes } from './modules/feature-flag'` | A/B testing & progressive rollout |
+| **Analytics** | `import { AnalyticsService, createAnalyticsRoutes } from './modules/analytics'` | Prometheus metrics & event tracking |
+| **Media Processing** | `import { MediaProcessingService } from './modules/media-processing'` | Image/video processing with FFmpeg |
+| **API Versioning** | `import { VersioningService, createVersioningMiddleware } from './modules/api-versioning'` | Multiple API versions support |
 
 ### Common Integration Patterns
 
@@ -246,6 +249,9 @@ servcraft add websocket         # Real-time with Socket.io
 servcraft add search            # Elasticsearch/Meilisearch search
 servcraft add i18n              # Multi-language support
 servcraft add feature-flag      # Feature flags & A/B testing
+servcraft add analytics         # Prometheus metrics & tracking
+servcraft add media-processing  # Image/video processing
+servcraft add api-versioning    # API version management
 servcraft add --list            # Show all modules
 ```
 
@@ -1218,16 +1224,14 @@ ServCraft includes these pre-built modules:
 - ✅ **Search** - Elasticsearch/Meilisearch full-text search
 - ✅ **i18n/Localization** - Multi-language support with 7+ locales
 - ✅ **Feature Flags** - A/B testing, progressive rollout, user targeting
+- ✅ **Analytics/Metrics** - Prometheus metrics, counters, gauges, histograms
+- ✅ **Media Processing** - Image/video processing with FFmpeg, thumbnails
+- ✅ **API Versioning** - Multiple API versions with migrations
 - ✅ **File Upload** - Multi-provider support (local, S3, etc.)
 - ✅ **MFA/TOTP** - Two-factor authentication with QR codes
 - ✅ **OAuth** - Google, GitHub, Facebook, Twitter, Apple
 - ✅ **Payments** - Stripe, PayPal, Mobile Money integration
 - ✅ **Notifications** - Email, SMS, Push notifications
-
-### Coming Soon
-- ⏳ **Analytics/Metrics** - Prometheus, custom metrics, dashboards
-- ⏳ **Media Processing** - Image/video processing with FFmpeg
-- ⏳ **API Versioning** - Multiple API versions support
 
 ## API Endpoints
 

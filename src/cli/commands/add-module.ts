@@ -127,6 +127,27 @@ const AVAILABLE_MODULES = {
     description: 'A/B testing & progressive rollout',
     files: ['feature-flag.service', 'feature-flag.routes', 'types.ts', 'index'],
   },
+  analytics: {
+    name: 'Analytics/Metrics',
+    description: 'Prometheus metrics & event tracking',
+    files: ['analytics.service', 'analytics.routes', 'types.ts', 'index'],
+  },
+  'media-processing': {
+    name: 'Media Processing',
+    description: 'Image/video processing with FFmpeg',
+    files: ['media-processing.service', 'media-processing.routes', 'types.ts', 'index'],
+  },
+  'api-versioning': {
+    name: 'API Versioning',
+    description: 'Multiple API versions support',
+    files: [
+      'versioning.service',
+      'versioning.middleware',
+      'versioning.routes',
+      'types.ts',
+      'index',
+    ],
+  },
 };
 
 export const addModuleCommand = new Command('add')
