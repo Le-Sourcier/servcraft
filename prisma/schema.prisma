@@ -407,3 +407,35 @@ enum OAuthProvider {
   TWITTER
   APPLE
 }
+
+// ==========================================
+// MFA (Multi-Factor Authentication)
+// ==========================================
+
+model UserMFA {
+  id              String      @id @default(uuid())
+  userId          String      @unique
+  enabled         Boolean     @default(false)
+  methods         MFAMethod[] @default([])
+  totpSecret      String?
+  totpVerified    Boolean     @default(false)
+  backupCodes     Json?       // String array stored as JSON
+  backupCodesUsed Json?       // String array stored as JSON
+  phoneNumber     String?
+  phoneVerified   Boolean     @default(false)
+  email           String?
+  emailVerified   Boolean     @default(false)
+  lastUsed        DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([userId])
+  @@map("user_mfa")
+}
+
+enum MFAMethod {
+  TOTP
+  SMS
+  EMAIL
+  BACKUP_CODES
+}

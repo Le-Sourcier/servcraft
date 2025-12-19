@@ -1,6 +1,18 @@
+/**
+ * MFA Service
+ * Multi-Factor Authentication with TOTP, SMS, Email, and Backup Codes
+ *
+ * Persistence:
+ * - User MFA settings: Prisma/PostgreSQL (persistent)
+ * - MFA challenges: Redis with TTL (5-minute expiration)
+ * - Failed attempts/lockouts: Redis with TTL (15-minute expiration)
+ */
 import { randomBytes, randomUUID } from 'crypto';
 import { logger } from '../../core/logger.js';
 import { BadRequestError } from '../../utils/errors.js';
+import { prisma } from '../../database/prisma.js';
+import { getRedis } from '../../database/redis.js';
+import { MFARepository } from './mfa.repository.js';
 import {
   generateSecret,
   verifyTOTP,
@@ -18,16 +30,15 @@ import type {
   BackupCodesResult,
 } from './types.js';
 
-// In-memory storage (use database in production)
-const userMFAStore = new Map<string, UserMFA>();
-const challengeStore = new Map<string, MFAChallenge>();
+// Redis key prefixes
+const MFA_CHALLENGE_PREFIX = 'mfa:challenge:';
+const MFA_ATTEMPTS_PREFIX = 'mfa:attempts:';
 
-const CHALLENGE_EXPIRATION = 5 * 60 * 1000; // 5 minutes
+// Expiration times
+const CHALLENGE_EXPIRATION_SECONDS = 5 * 60; // 5 minutes
+const LOCKOUT_EXPIRATION_SECONDS = 15 * 60; // 15 minutes
+
 const MAX_ATTEMPTS = 5;
-const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
-
-// Track failed attempts
-const failedAttempts = new Map<string, { count: number; lockedUntil?: Date }>();
 
 const defaultConfig: MFAConfig = {
   issuer: 'Servcraft',
@@ -35,14 +46,18 @@ const defaultConfig: MFAConfig = {
   backupCodesCount: 10,
 };
 
+interface FailedAttempts {
+  count: number;
+  lockedUntil?: string;
+}
+
 export class MFAService {
   private config: MFAConfig;
+  private repository: MFARepository;
 
   constructor(config: Partial<MFAConfig> = {}) {
     this.config = { ...defaultConfig, ...config };
-
-    // Cleanup expired challenges periodically
-    setInterval(() => this.cleanupExpiredChallenges(), 60000);
+    this.repository = new MFARepository(prisma);
   }
 
   // TOTP Setup
@@ -51,16 +66,16 @@ export class MFAService {
     const uri = generateTOTPUri(secret, email, this.config.issuer);
     const qrCode = await generateQRCode(uri);
 
-    // Store pending TOTP setup
-    let userMFA = userMFAStore.get(userId);
+    // Get or create user MFA
+    let userMFA = await this.repository.getByUserId(userId);
     if (!userMFA) {
       userMFA = this.createUserMFA(userId);
     }
 
     userMFA.totpSecret = secret;
     userMFA.totpVerified = false;
-    userMFA.updatedAt = new Date();
-    userMFAStore.set(userId, userMFA);
+
+    await this.repository.upsert(userMFA);
 
     logger.info({ userId }, 'TOTP setup initiated');
 
@@ -73,7 +88,7 @@ export class MFAService {
   }
 
   async verifyTOTPSetup(userId: string, code: string): Promise<boolean> {
-    const userMFA = userMFAStore.get(userId);
+    const userMFA = await this.repository.getByUserId(userId);
     if (!userMFA || !userMFA.totpSecret) {
       throw new BadRequestError('TOTP not set up');
     }
@@ -90,9 +105,8 @@ export class MFAService {
         userMFA.methods.push('totp');
       }
       userMFA.enabled = true;
-      userMFA.updatedAt = new Date();
-      userMFAStore.set(userId, userMFA);
 
+      await this.repository.upsert(userMFA);
       logger.info({ userId }, 'TOTP setup verified');
     }
 
@@ -100,7 +114,7 @@ export class MFAService {
   }
 
   async disableTOTP(userId: string, code: string): Promise<void> {
-    const userMFA = userMFAStore.get(userId);
+    const userMFA = await this.repository.getByUserId(userId);
     if (!userMFA || !userMFA.totpVerified) {
       throw new BadRequestError('TOTP not enabled');
     }
@@ -115,23 +129,22 @@ export class MFAService {
     userMFA.totpVerified = false;
     userMFA.methods = userMFA.methods.filter((m) => m !== 'totp');
     userMFA.enabled = userMFA.methods.length > 0;
-    userMFA.updatedAt = new Date();
-    userMFAStore.set(userId, userMFA);
 
+    await this.repository.upsert(userMFA);
     logger.info({ userId }, 'TOTP disabled');
   }
 
   // SMS MFA
   async setupSMS(userId: string, phoneNumber: string): Promise<void> {
-    let userMFA = userMFAStore.get(userId);
+    let userMFA = await this.repository.getByUserId(userId);
     if (!userMFA) {
       userMFA = this.createUserMFA(userId);
     }
 
     userMFA.phoneNumber = phoneNumber;
     userMFA.phoneVerified = false;
-    userMFA.updatedAt = new Date();
-    userMFAStore.set(userId, userMFA);
+
+    await this.repository.upsert(userMFA);
 
     // Send verification code
     await this.sendSMSChallenge(userId, phoneNumber);
@@ -143,15 +156,14 @@ export class MFAService {
     const result = await this.verifyChallenge(userId, code, 'sms');
 
     if (result.success) {
-      const userMFA = userMFAStore.get(userId)!;
+      const userMFA = (await this.repository.getByUserId(userId))!;
       userMFA.phoneVerified = true;
       if (!userMFA.methods.includes('sms')) {
         userMFA.methods.push('sms');
       }
       userMFA.enabled = true;
-      userMFA.updatedAt = new Date();
-      userMFAStore.set(userId, userMFA);
 
+      await this.repository.upsert(userMFA);
       logger.info({ userId }, 'SMS MFA setup verified');
     }
 
@@ -160,15 +172,15 @@ export class MFAService {
 
   // Email MFA
   async setupEmail(userId: string, email: string): Promise<void> {
-    let userMFA = userMFAStore.get(userId);
+    let userMFA = await this.repository.getByUserId(userId);
     if (!userMFA) {
       userMFA = this.createUserMFA(userId);
     }
 
     userMFA.email = email;
     userMFA.emailVerified = false;
-    userMFA.updatedAt = new Date();
-    userMFAStore.set(userId, userMFA);
+
+    await this.repository.upsert(userMFA);
 
     // Send verification code
     await this.sendEmailChallenge(userId, email);
@@ -180,15 +192,14 @@ export class MFAService {
     const result = await this.verifyChallenge(userId, code, 'email');
 
     if (result.success) {
-      const userMFA = userMFAStore.get(userId)!;
+      const userMFA = (await this.repository.getByUserId(userId))!;
       userMFA.emailVerified = true;
       if (!userMFA.methods.includes('email')) {
         userMFA.methods.push('email');
       }
       userMFA.enabled = true;
-      userMFA.updatedAt = new Date();
-      userMFAStore.set(userId, userMFA);
 
+      await this.repository.upsert(userMFA);
       logger.info({ userId }, 'Email MFA setup verified');
     }
 
@@ -197,7 +208,7 @@ export class MFAService {
 
   // Backup Codes
   async generateBackupCodes(userId: string): Promise<BackupCodesResult> {
-    let userMFA = userMFAStore.get(userId);
+    let userMFA = await this.repository.getByUserId(userId);
     if (!userMFA) {
       userMFA = this.createUserMFA(userId);
     }
@@ -214,8 +225,8 @@ export class MFAService {
     if (!userMFA.methods.includes('backup_codes')) {
       userMFA.methods.push('backup_codes');
     }
-    userMFA.updatedAt = new Date();
-    userMFAStore.set(userId, userMFA);
+
+    await this.repository.upsert(userMFA);
 
     logger.info({ userId, count: codes.length }, 'Backup codes generated');
 
@@ -226,7 +237,7 @@ export class MFAService {
   }
 
   async verifyBackupCode(userId: string, code: string): Promise<boolean> {
-    const userMFA = userMFAStore.get(userId);
+    const userMFA = await this.repository.getByUserId(userId);
     if (!userMFA || !userMFA.backupCodes) {
       return false;
     }
@@ -248,16 +259,16 @@ export class MFAService {
     userMFA.backupCodesUsed = userMFA.backupCodesUsed || [];
     userMFA.backupCodesUsed.push(formattedCode);
     userMFA.lastUsed = new Date();
-    userMFA.updatedAt = new Date();
-    userMFAStore.set(userId, userMFA);
+
+    await this.repository.upsert(userMFA);
 
     logger.info({ userId }, 'Backup code used');
 
     return true;
   }
 
-  getRemainingBackupCodes(userId: string): number {
-    const userMFA = userMFAStore.get(userId);
+  async getRemainingBackupCodes(userId: string): Promise<number> {
+    const userMFA = await this.repository.getByUserId(userId);
     if (!userMFA || !userMFA.backupCodes) {
       return 0;
     }
@@ -268,14 +279,17 @@ export class MFAService {
   // Challenge Management
   async createChallenge(userId: string, method: MFAMethod): Promise<MFAChallenge> {
     // Check for lockout
-    const attempts = failedAttempts.get(userId);
-    if (attempts?.lockedUntil && attempts.lockedUntil > new Date()) {
-      throw new BadRequestError(
-        `Account locked. Try again after ${attempts.lockedUntil.toISOString()}`
-      );
+    const attempts = await this.getFailedAttempts(userId);
+    if (attempts?.lockedUntil) {
+      const lockedUntilDate = new Date(attempts.lockedUntil);
+      if (lockedUntilDate > new Date()) {
+        throw new BadRequestError(
+          `Account locked. Try again after ${lockedUntilDate.toISOString()}`
+        );
+      }
     }
 
-    const userMFA = userMFAStore.get(userId);
+    const userMFA = await this.repository.getByUserId(userId);
     if (!userMFA || !userMFA.enabled) {
       throw new BadRequestError('MFA not enabled');
     }
@@ -288,7 +302,7 @@ export class MFAService {
       id: randomUUID(),
       userId,
       method,
-      expiresAt: new Date(Date.now() + CHALLENGE_EXPIRATION),
+      expiresAt: new Date(Date.now() + CHALLENGE_EXPIRATION_SECONDS * 1000),
       attempts: 0,
       maxAttempts: MAX_ATTEMPTS,
       verified: false,
@@ -304,7 +318,13 @@ export class MFAService {
       await this.sendEmailChallenge(userId, userMFA.email!, challenge.code);
     }
 
-    challengeStore.set(challenge.id, challenge);
+    // Store challenge in Redis
+    const redis = getRedis();
+    await redis.setex(
+      `${MFA_CHALLENGE_PREFIX}${challenge.id}`,
+      CHALLENGE_EXPIRATION_SECONDS,
+      JSON.stringify(challenge)
+    );
 
     logger.info({ userId, method, challengeId: challenge.id }, 'MFA challenge created');
 
@@ -321,16 +341,19 @@ export class MFAService {
     challengeId?: string
   ): Promise<MFAVerifyResult> {
     // Check for lockout
-    const attempts = failedAttempts.get(userId);
-    if (attempts?.lockedUntil && attempts.lockedUntil > new Date()) {
-      return {
-        success: false,
-        method: method || 'totp',
-        lockedUntil: attempts.lockedUntil,
-      };
+    const attempts = await this.getFailedAttempts(userId);
+    if (attempts?.lockedUntil) {
+      const lockedUntilDate = new Date(attempts.lockedUntil);
+      if (lockedUntilDate > new Date()) {
+        return {
+          success: false,
+          method: method || 'totp',
+          lockedUntil: lockedUntilDate,
+        };
+      }
     }
 
-    const userMFA = userMFAStore.get(userId);
+    const userMFA = await this.repository.getByUserId(userId);
     if (!userMFA || !userMFA.enabled) {
       throw new BadRequestError('MFA not enabled');
     }
@@ -362,77 +385,50 @@ export class MFAService {
       case 'sms':
       case 'email':
         if (challengeId) {
-          const challenge = challengeStore.get(challengeId);
-          if (
-            challenge &&
-            challenge.userId === userId &&
-            challenge.method === method &&
-            challenge.expiresAt > new Date() &&
-            !challenge.verified
-          ) {
-            if (challenge.code === code) {
-              challenge.verified = true;
-              challengeStore.set(challengeId, challenge);
-              success = true;
-            } else {
-              challenge.attempts++;
-              challengeStore.set(challengeId, challenge);
-            }
-          }
+          success = await this.verifyChallengeCode(userId, challengeId, method, code);
         }
         break;
     }
 
     if (success) {
       // Reset failed attempts
-      failedAttempts.delete(userId);
+      await this.clearFailedAttempts(userId);
       userMFA.lastUsed = new Date();
-      userMFA.updatedAt = new Date();
-      userMFAStore.set(userId, userMFA);
+      await this.repository.upsert(userMFA);
 
       logger.info({ userId, method }, 'MFA verification successful');
     } else {
       // Track failed attempt
-      const current = failedAttempts.get(userId) || { count: 0 };
-      current.count++;
+      const currentAttempts = await this.incrementFailedAttempts(userId);
 
-      if (current.count >= MAX_ATTEMPTS) {
-        current.lockedUntil = new Date(Date.now() + LOCKOUT_DURATION);
-        logger.warn({ userId }, 'MFA account locked due to too many failed attempts');
-      }
-
-      failedAttempts.set(userId, current);
-
-      logger.info({ userId, method, attempts: current.count }, 'MFA verification failed');
+      logger.info({ userId, method, attempts: currentAttempts.count }, 'MFA verification failed');
     }
 
+    const finalAttempts = await this.getFailedAttempts(userId);
     return {
       success,
       method: method || 'totp',
-      remainingAttempts: success
-        ? undefined
-        : MAX_ATTEMPTS - (failedAttempts.get(userId)?.count || 0),
-      lockedUntil: failedAttempts.get(userId)?.lockedUntil,
+      remainingAttempts: success ? undefined : MAX_ATTEMPTS - (finalAttempts?.count || 0),
+      lockedUntil: finalAttempts?.lockedUntil ? new Date(finalAttempts.lockedUntil) : undefined,
     };
   }
 
   // User MFA Status
   async getUserMFA(userId: string): Promise<UserMFA | null> {
-    return userMFAStore.get(userId) || null;
+    return this.repository.getByUserId(userId);
   }
 
   async isMFAEnabled(userId: string): Promise<boolean> {
-    const userMFA = userMFAStore.get(userId);
-    return userMFA?.enabled || false;
+    return this.repository.isEnabled(userId);
   }
 
   async getEnabledMethods(userId: string): Promise<MFAMethod[]> {
-    const userMFA = userMFAStore.get(userId);
-    return userMFA?.methods || [];
+    return this.repository.getEnabledMethods(userId);
   }
 
   async disableAllMFA(userId: string): Promise<void> {
-    userMFAStore.delete(userId);
+    await this.repository.delete(userId);
+    await this.clearFailedAttempts(userId);
     logger.info({ userId }, 'All MFA disabled');
   }
 
@@ -479,20 +475,85 @@ export class MFAService {
     // In production, use notification service to send email
   }
 
-  private cleanupExpiredChallenges(): void {
-    const now = new Date();
-    let cleaned = 0;
+  // Redis helpers for challenges
+  private async verifyChallengeCode(
+    userId: string,
+    challengeId: string,
+    method: MFAMethod,
+    code: string
+  ): Promise<boolean> {
+    const redis = getRedis();
+    const challengeJson = await redis.get(`${MFA_CHALLENGE_PREFIX}${challengeId}`);
 
-    for (const [id, challenge] of challengeStore.entries()) {
-      if (challenge.expiresAt < now) {
-        challengeStore.delete(id);
-        cleaned++;
-      }
+    if (!challengeJson) {
+      return false;
     }
 
-    if (cleaned > 0) {
-      logger.debug({ cleaned }, 'Expired MFA challenges cleaned');
+    const challenge = JSON.parse(challengeJson) as MFAChallenge;
+
+    if (
+      challenge.userId !== userId ||
+      challenge.method !== method ||
+      new Date(challenge.expiresAt) < new Date() ||
+      challenge.verified
+    ) {
+      return false;
     }
+
+    if (challenge.code === code) {
+      challenge.verified = true;
+      await redis.setex(
+        `${MFA_CHALLENGE_PREFIX}${challengeId}`,
+        60, // Keep for 1 minute after verification
+        JSON.stringify(challenge)
+      );
+      return true;
+    }
+
+    challenge.attempts++;
+    await redis.setex(
+      `${MFA_CHALLENGE_PREFIX}${challengeId}`,
+      CHALLENGE_EXPIRATION_SECONDS,
+      JSON.stringify(challenge)
+    );
+    return false;
+  }
+
+  // Redis helpers for failed attempts
+  private async getFailedAttempts(userId: string): Promise<FailedAttempts | null> {
+    const redis = getRedis();
+    const attemptsJson = await redis.get(`${MFA_ATTEMPTS_PREFIX}${userId}`);
+
+    if (!attemptsJson) {
+      return null;
+    }
+
+    return JSON.parse(attemptsJson) as FailedAttempts;
+  }
+
+  private async incrementFailedAttempts(userId: string): Promise<FailedAttempts> {
+    const redis = getRedis();
+    const current = (await this.getFailedAttempts(userId)) || { count: 0 };
+
+    current.count++;
+
+    if (current.count >= MAX_ATTEMPTS) {
+      current.lockedUntil = new Date(Date.now() + LOCKOUT_EXPIRATION_SECONDS * 1000).toISOString();
+      logger.warn({ userId }, 'MFA account locked due to too many failed attempts');
+    }
+
+    await redis.setex(
+      `${MFA_ATTEMPTS_PREFIX}${userId}`,
+      LOCKOUT_EXPIRATION_SECONDS,
+      JSON.stringify(current)
+    );
+
+    return current;
+  }
+
+  private async clearFailedAttempts(userId: string): Promise<void> {
+    const redis = getRedis();
+    await redis.del(`${MFA_ATTEMPTS_PREFIX}${userId}`);
   }
 }
 
