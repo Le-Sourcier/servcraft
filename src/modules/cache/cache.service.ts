@@ -1,5 +1,6 @@
 import { logger } from '../../core/logger.js';
 import type { CacheConfig, CacheEntry, CacheOptions, CacheStats, RedisConfig } from './types.js';
+import { Redis } from 'ioredis';
 
 const defaultConfig: CacheConfig = {
   provider: 'memory',
@@ -13,7 +14,7 @@ const stats: CacheStats = { hits: 0, misses: 0, keys: 0 };
 
 export class CacheService {
   private config: CacheConfig;
-  private redisClient: RedisClient | null = null;
+  private redisClient: Redis | null = null;
 
   constructor(config: Partial<CacheConfig> = {}) {
     this.config = { ...defaultConfig, ...config };
@@ -235,13 +236,46 @@ export class CacheService {
     }
   }
 
-  // Redis methods (simplified - use ioredis in production)
+  // Redis methods
   private initRedis(config: RedisConfig): void {
-    // Placeholder for Redis initialization
-    // In production, use:
-    // import Redis from 'ioredis';
-    // this.redisClient = new Redis(config);
-    logger.info({ host: config.host, port: config.port }, 'Redis cache configured');
+    try {
+      this.redisClient = new Redis({
+        host: config.host,
+        port: config.port,
+        password: config.password,
+        db: config.db || 0,
+        connectTimeout: config.connectTimeout || 10000,
+        retryStrategy: (times: number) => {
+          const maxRetries = config.maxRetries || 10;
+          if (times > maxRetries) {
+            logger.error('Redis max retries reached, giving up');
+            return null;
+          }
+          const delay = Math.min(times * 50, 2000);
+          return delay;
+        },
+        ...(config.tls && { tls: {} }),
+      });
+
+      this.redisClient.on('connect', () => {
+        logger.info({ host: config.host, port: config.port }, 'Redis cache connected');
+      });
+
+      this.redisClient.on('error', (error: Error) => {
+        logger.error({ err: error }, 'Redis cache error');
+      });
+
+      this.redisClient.on('close', () => {
+        logger.warn('Redis cache connection closed');
+      });
+
+      this.redisClient.on('reconnecting', () => {
+        logger.info('Redis cache reconnecting');
+      });
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to initialize Redis cache');
+      this.redisClient = null;
+    }
   }
 
   private async redisGet<T>(key: string): Promise<T | null> {
@@ -297,17 +331,6 @@ export class CacheService {
       this.redisClient = null;
     }
   }
-}
-
-// Simplified Redis client interface
-interface RedisClient {
-  get(key: string): Promise<string | null>;
-  setex(key: string, ttl: number, value: string): Promise<void>;
-  del(...keys: string[]): Promise<number>;
-  exists(key: string): Promise<number>;
-  keys(pattern: string): Promise<string[]>;
-  incrby(key: string, delta: number): Promise<number>;
-  quit(): Promise<void>;
 }
 
 let cacheService: CacheService | null = null;

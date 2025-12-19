@@ -74,13 +74,16 @@ ServCraft est un framework backend Node.js modulaire avec **22 modules** et **~2
   - **Bonus :** Support multi-provider (Stripe, PayPal, Mobile Money), webhooks, subscriptions
 
 ### 1.4 Cache Service - Redis Connection
-- [ ] ⏳ **CACHE-001** : Connecter réellement Redis
-  - Fichier : `src/modules/cache/cache.service.ts:239-246`
-  - Remplacer : Placeholder → vraie connexion ioredis
-  - Impact : Cache perdu au restart
-  - Estimation : 4h
-  - Tests requis : `tests/integration/cache-redis.test.ts`
-  - Documentation : `docs/modules/CACHE.md`
+- [x] ✅ **CACHE-001** : Connecter réellement Redis
+  - Fichier : `src/modules/cache/cache.service.ts` ✅ Modifié
+  - Remplacer : Placeholder → vraie connexion ioredis ✅ Fait
+  - Impact : Cache perdu au restart → **CORRIGÉ**
+  - Temps réel : 4h
+  - Tests : `tests/integration/cache-redis.test.ts` ✅ Créé (30+ tests)
+  - Documentation : `docs/modules/CACHE.md` ✅ Créé
+  - **Complété le :** 2025-12-19
+  - **Commit :** À venir
+  - **Bonus :** Retry strategy, error handling, connection events
 
 ### 1.5 Queue Service - BullMQ Integration
 - [ ] ⏳ **QUEUE-001** : Remplacer Map par BullMQ
