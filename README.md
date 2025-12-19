@@ -78,6 +78,7 @@ All services are available as importable modules in your code:
 | **Payments** | `import { PaymentService } from './modules/payment'` | Process payments |
 | **Upload** | `import { UploadService } from './modules/upload'` | File uploads |
 | **Notifications** | `import { NotificationService } from './modules/notification'` | Send notifications |
+| **Search** | `import { SearchService, ElasticsearchAdapter } from './modules/search'` | Full-text search with Elasticsearch/Meilisearch |
 
 ### Common Integration Patterns
 
@@ -240,6 +241,7 @@ servcraft add rate-limit        # Advanced rate limiting
 servcraft add webhook           # Outgoing webhooks
 servcraft add queue             # Background jobs & queues
 servcraft add websocket         # Real-time with Socket.io
+servcraft add search            # Elasticsearch/Meilisearch search
 servcraft add --list            # Show all modules
 ```
 
@@ -736,6 +738,178 @@ io.use(throttleMiddleware(100, 1000)); // 100 events per second
 - **Rooms**: Create, join, leave, member management
 - **Broadcasting**: To all, to room, to specific users
 
+### Search (Elasticsearch/Meilisearch)
+
+Full-text search with support for Elasticsearch, Meilisearch, or in-memory adapter for development:
+
+**Features:**
+- Multiple search engines: Elasticsearch, Meilisearch, In-memory
+- Unified interface for all engines
+- Full-text search with fuzzy matching
+- Filtering, sorting, pagination
+- Faceted search
+- Autocomplete suggestions
+- Similar document search
+- Bulk indexing
+- Index management & statistics
+
+**Usage:**
+
+```typescript
+import {
+  SearchService,
+  ElasticsearchAdapter,
+  MeilisearchAdapter,
+  MemorySearchAdapter
+} from './modules/search';
+
+// Using Elasticsearch
+import { Client } from '@elastic/elasticsearch';
+const esClient = new Client({ node: 'http://localhost:9200' });
+const searchService = new SearchService(
+  { engine: 'elasticsearch' },
+  new ElasticsearchAdapter(esClient)
+);
+
+// Or Meilisearch
+import { MeiliSearch } from 'meilisearch';
+const meiliClient = new MeiliSearch({ host: 'http://localhost:7700' });
+const searchService = new SearchService(
+  { engine: 'meilisearch' },
+  new MeilisearchAdapter(meiliClient)
+);
+
+// Or in-memory (for development)
+const searchService = new SearchService(); // Uses MemorySearchAdapter by default
+
+// Create an index
+await searchService.createIndex('products', {
+  searchableAttributes: ['title', 'description', 'tags'],
+  filterableAttributes: ['category', 'price', 'inStock'],
+  sortableAttributes: ['price', 'createdAt']
+});
+
+// Index documents
+await searchService.indexDocuments('products', [
+  {
+    id: '1',
+    title: 'Laptop',
+    description: 'High-performance laptop',
+    category: 'electronics',
+    price: 999,
+    inStock: true
+  },
+  {
+    id: '2',
+    title: 'Headphones',
+    description: 'Noise-canceling headphones',
+    category: 'electronics',
+    price: 299,
+    inStock: true
+  }
+]);
+
+// Search
+const results = await searchService.search('products', {
+  query: 'laptop',
+  filters: [
+    { field: 'category', operator: 'eq', value: 'electronics' },
+    { field: 'price', operator: 'lte', value: 1000 }
+  ],
+  sort: [{ field: 'price', direction: 'asc' }],
+  limit: 10
+});
+
+// Autocomplete
+const suggestions = await searchService.autocomplete('products', 'lap', 5);
+
+// Search with facets
+const facetResults = await searchService.searchWithFacets('products', 'laptop', {
+  facets: ['category', 'inStock'],
+  filters: [{ field: 'price', operator: 'gte', value: 100 }]
+});
+
+// Similar documents
+const similar = await searchService.searchSimilar('products', '1', 5);
+
+// Reindex (with transformation)
+await searchService.reindex('products', 'products_v2', (doc) => ({
+  ...doc,
+  slug: doc.title.toLowerCase().replace(/\s+/g, '-')
+}));
+```
+
+**Integration Example:**
+
+```typescript
+// Product search endpoint
+app.get('/api/products/search', async (req, res) => {
+  const { q, category, minPrice, maxPrice, sort } = req.query;
+
+  const filters = [];
+  if (category) {
+    filters.push({ field: 'category', operator: 'eq', value: category });
+  }
+  if (minPrice) {
+    filters.push({ field: 'price', operator: 'gte', value: Number(minPrice) });
+  }
+  if (maxPrice) {
+    filters.push({ field: 'price', operator: 'lte', value: Number(maxPrice) });
+  }
+
+  const results = await searchService.search('products', {
+    query: q || '*',
+    filters,
+    sort: sort ? [{ field: sort, direction: 'asc' }] : undefined,
+    limit: 20
+  });
+
+  res.json(results);
+});
+
+// Autocomplete endpoint
+app.get('/api/products/autocomplete', async (req, res) => {
+  const { q } = req.query;
+  const suggestions = await searchService.autocomplete('products', q, 10);
+  res.json(suggestions);
+});
+
+// Index product when created
+app.post('/api/products', async (req, res) => {
+  const product = await db.product.create(req.body);
+
+  // Index in search engine
+  await searchService.indexDocument('products', product.id, product);
+
+  res.json(product);
+});
+```
+
+**Filter Operators:**
+
+- `eq` - Equal to
+- `ne` - Not equal to
+- `gt` - Greater than
+- `gte` - Greater than or equal to
+- `lt` - Less than
+- `lte` - Less than or equal to
+- `in` - In array
+- `nin` - Not in array
+- `contains` - Contains text
+- `exists` - Field exists
+
+**Index Statistics:**
+
+```typescript
+const stats = await searchService.getStats('products');
+console.log({
+  documentCount: stats.documentCount,
+  size: stats.size,
+  isIndexing: stats.isIndexing,
+  health: stats.health
+});
+```
+
 ## Modules & Resources
 
 ServCraft includes these pre-built modules:
@@ -752,6 +926,7 @@ ServCraft includes these pre-built modules:
 - ✅ **Webhooks (Outgoing)** - HMAC signatures, auto-retry, delivery tracking
 - ✅ **Queue/Jobs** - Background tasks, cron scheduling, 10+ workers
 - ✅ **Websockets/Real-time** - Chat, presence, notifications, live events
+- ✅ **Search** - Elasticsearch/Meilisearch full-text search
 - ✅ **File Upload** - Multi-provider support (local, S3, etc.)
 - ✅ **MFA/TOTP** - Two-factor authentication with QR codes
 - ✅ **OAuth** - Google, GitHub, Facebook, Twitter, Apple
@@ -759,7 +934,6 @@ ServCraft includes these pre-built modules:
 - ✅ **Notifications** - Email, SMS, Push notifications
 
 ### Coming Soon
-- ⏳ **Search** - Elasticsearch/Meilisearch integration
 - ⏳ **i18n/Localization** - Multi-language support
 - ⏳ **Feature Flags** - A/B testing, progressive rollout
 - ⏳ **Analytics/Metrics** - Prometheus, custom metrics
