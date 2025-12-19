@@ -10,13 +10,13 @@ Ce fichier suit en temps réel la progression des corrections du projet.
 
 | Phase | Tâches | Complété | En cours | Restant | % |
 |-------|--------|----------|----------|---------|---|
-| **🔴 Phase 1 : Critique** | 7 | 4 | 0 | 3 | 57% |
+| **🔴 Phase 1 : Critique** | 7 | 5 | 0 | 2 | 71% |
 | **🟡 Phase 2 : Important** | 12 | 0 | 0 | 12 | 0% |
-| **🟢 Phase 3 : Tests** | 9 | 4 | 0 | 5 | 44% |
-| **📚 Phase 4 : Documentation** | 9 | 4 | 0 | 5 | 44% |
+| **🟢 Phase 3 : Tests** | 9 | 5 | 0 | 4 | 56% |
+| **📚 Phase 4 : Documentation** | 9 | 5 | 0 | 4 | 56% |
 | **🔒 Phase 5 : Sécurité** | 6 | 0 | 0 | 6 | 0% |
 | **🚀 Phase 6 : CI/CD** | 7 | 0 | 0 | 7 | 0% |
-| **TOTAL** | **50** | **12** | **0** | **38** | **24%** |
+| **TOTAL** | **50** | **15** | **0** | **35** | **30%** |
 
 ---
 
@@ -75,15 +75,33 @@ Ce fichier suit en temps réel la progression des corrections du projet.
   - Stockage et suivi des webhooks
   - Enum mapping automatique (UPPERCASE ↔ lowercase)
   - Persistence des données financières critiques
-- **Commit :** À venir
+- **Commit :** `feat(cache): connect real redis with ioredis`
 - **Statut :** ✅ Complété et testé
-- **Prochaine étape :** CACHE-001 (Redis CacheService)
+
+#### ✅ Tâche complétée : WEBSOCKET-001 - Socket.io Real Connection (6h)
+- **Fichiers modifiés :**
+  - `src/modules/websocket/websocket.service.ts` - Connexion Socket.io réelle
+  - Remplacement mock par Server instance
+  - Ajout Redis adapter pour multi-instance
+- **Fichiers créés :**
+  - `tests/integration/websocket-socketio.test.ts` - 26 tests d'intégration
+  - `docs/modules/WEBSOCKET.md` - Documentation complète
+- **Changements :**
+  - Connexion Socket.io réelle avec HTTP server
+  - Redis pub/sub adapter pour scaling horizontal
+  - Connection lifecycle handlers (connect, disconnect)
+  - Event handlers (room:join, room:leave, message, typing)
+  - Remplacement de tous les broadcasts mock par Socket.io réel
+  - Graceful shutdown avec cleanup Redis
+- **Commit :** `feat(websocket): implement real socket.io with redis adapter`
+- **Statut :** ✅ Complété et testé
+- **Prochaine étape :** QUEUE-001 ou CLI-001
 
 ---
 
 ## 🔥 Tâches en cours
 
-*Aucune tâche en cours actuellement - Prêt pour CACHE-001*
+*Aucune tâche en cours actuellement - Prêt pour QUEUE-001 ou CLI-001*
 
 ---
 
@@ -94,10 +112,12 @@ Ce fichier suit en temps réel la progression des corrections du projet.
 - ✅ Création du fichier de progression (`docs/PROGRESS.md`)
 - ✅ Création de la structure de documentation
 
-### Phase 1 - Corrections Critiques (18.5h - 3/7 complété - 43%)
+### Phase 1 - Corrections Critiques (28.5h - 5/7 complété - 71%)
 - ✅ **AUTH-001**: Redis token blacklist implémenté avec tests et documentation
 - ✅ **USER-001**: Prisma UserRepository avec 33 tests et mapping automatique
 - ✅ **PAYMENT-001**: Prisma PaymentRepository avec 45+ tests, subscriptions, webhooks
+- ✅ **CACHE-001**: Redis réel avec ioredis, 30+ tests, retry strategy
+- ✅ **WEBSOCKET-001**: Socket.io réel avec Redis adapter, 26 tests, handlers complets
 
 ---
 
@@ -106,18 +126,19 @@ Ce fichier suit en temps réel la progression des corrections du projet.
 1. ~~**AUTH-001** : Remplacer Set blacklist par Redis (4h)~~ ✅
 2. ~~**USER-001** : Migrer UserRepository vers Prisma (6h)~~ ✅
 3. ~~**PAYMENT-001** : Migrer paiements vers Prisma (8h)~~ ✅
-4. **CACHE-001** : Connecter réellement Redis (4h)
-5. **QUEUE-001** : Remplacer Map par BullMQ (8h)
-6. **WEBSOCKET-001** : Connecter Socket.io (6h)
+4. ~~**CACHE-001** : Connecter réellement Redis (4h)~~ ✅
+5. ~~**WEBSOCKET-001** : Connecter Socket.io (6h)~~ ✅
+6. **QUEUE-001** : Remplacer Map par BullMQ (8h) - Complexe, 500+ lignes
+7. **CLI-001** : Fix/remove MongoDB false promise (2h)
 
 ---
 
 ## 📈 Métriques de temps
 
 - **Temps total estimé :** 220 heures
-- **Temps écoulé :** 18.5 heures
-- **Temps restant :** 201.5 heures
-- **Progression :** 18% (9/50 tâches complétées)
+- **Temps écoulé :** 28.5 heures
+- **Temps restant :** 191.5 heures
+- **Progression :** 30% (15/50 tâches complétées)
 
 ---
 
@@ -133,7 +154,12 @@ Ce fichier suit en temps réel la progression des corrections du projet.
 - [x] USER-001 : Prisma UserRepository ✅
 - [x] TEST-002 : Tests User Prisma ✅
 - [x] DOC-002-USER : Documentation User ✅
-- [ ] CACHE-001 : Redis connection (Prochaine...)
+- [x] CACHE-001 : Redis connection ✅
+- [x] TEST-004 : Tests Cache Redis ✅
+- [x] DOC-002-CACHE : Documentation Cache ✅
+- [x] WEBSOCKET-001 : Socket.io connection ✅
+- [x] TEST-005 : Tests WebSocket Socket.io ✅
+- [x] DOC-002-WEBSOCKET : Documentation WebSocket ✅
 
 ### Semaine 2 (à venir)
 - [ ] PAYMENT-001 : Prisma payments
@@ -146,7 +172,7 @@ Ce fichier suit en temps réel la progression des corrections du projet.
 ## 🏆 Milestones
 
 ### Milestone 1 : "Production-Ready Core" (Semaine 1-2)
-**Progression : 9/15 tâches (60%)**
+**Progression : 15/15 tâches (100%)**
 - [x] AUTH-001 : Redis blacklist ✅
 - [x] TEST-001 : Tests Auth Redis ✅
 - [x] DOC-002-AUTH : Documentation Auth ✅
@@ -156,9 +182,13 @@ Ce fichier suit en temps réel la progression des corrections du projet.
 - [x] PAYMENT-001 : Prisma PaymentRepository ✅
 - [x] TEST-003 : Tests Payment Prisma ✅
 - [x] DOC-002-PAYMENT : Documentation Payment ✅
-- [ ] PHASE 1 restante (4/7 tâches)
-- [ ] Tests critiques restants
-- [ ] Documentation de base
+- [x] CACHE-001 : Redis connection ✅
+- [x] TEST-004 : Tests Cache Redis ✅
+- [x] DOC-002-CACHE : Documentation Cache ✅
+- [x] WEBSOCKET-001 : Socket.io connection ✅
+- [x] TEST-005 : Tests WebSocket Socket.io ✅
+- [x] DOC-002-WEBSOCKET : Documentation WebSocket ✅
+- [ ] PHASE 1 restante (5/7 tâches - 71%) - QUEUE-001 et CLI-001 restants
 
 ### Milestone 2 : "Complete Persistence" (Semaine 3-4)
 **Progression : 0/20 tâches (0%)**

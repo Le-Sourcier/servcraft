@@ -93,15 +93,19 @@ ServCraft est un framework backend Node.js modulaire avec **22 modules** et **~2
   - Estimation : 8h
   - Tests requis : `tests/integration/queue-bullmq.test.ts`
   - Documentation : `docs/modules/QUEUE.md`
+  - **Note :** BullMQ déjà installé, migration complexe (500+ lignes)
+  - **Status :** Analyse complétée, migration en attente
 
 ### 1.6 WebSocket Service - Socket.io Integration
-- [ ] ⏳ **WEBSOCKET-001** : Connecter réellement Socket.io
+- [x] ✅ **WEBSOCKET-001** : Connecter réellement Socket.io
   - Fichier : `src/modules/websocket/websocket.service.ts:58-62`
   - Remplacer : Mock → vraie instance Socket.io
   - Impact : Connexions perdues au restart
   - Estimation : 6h
-  - Tests requis : `tests/integration/websocket-socketio.test.ts`
-  - Documentation : `docs/modules/WEBSOCKET.md`
+  - Tests requis : `tests/integration/websocket-socketio.test.ts` ✅ (26 tests)
+  - Documentation : `docs/modules/WEBSOCKET.md` ✅
+  - **Commit :** `feat(websocket): implement real socket.io with redis adapter`
+  - **Bonus :** Redis adapter, connection handlers, typing indicators, graceful shutdown
 
 ### 1.7 MongoDB Support - Fix or Remove
 - [ ] ⏳ **CLI-001** : Supprimer MongoDB du CLI (solution rapide)
