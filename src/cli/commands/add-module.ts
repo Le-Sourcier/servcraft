@@ -55,31 +55,77 @@ const AVAILABLE_MODULES = {
     description: 'Activity logging and audit trail',
     files: ['audit.service', 'audit.types', 'index'],
   },
-  upload: {
-    name: 'File Upload',
-    description: 'File upload with local/S3 storage',
-    files: ['upload.service', 'upload.controller', 'upload.routes', 'upload.types', 'index'],
-  },
   cache: {
     name: 'Redis Cache',
-    description: 'Redis caching service',
+    description: 'Redis caching with TTL & invalidation',
     files: ['cache.service', 'cache.types', 'index'],
   },
-  notifications: {
-    name: 'Notifications',
-    description: 'In-app and push notifications',
-    files: ['notification.service', 'notification.types', 'index'],
+  upload: {
+    name: 'File Upload',
+    description: 'File upload with local/S3/Cloudinary storage',
+    files: ['upload.service', 'upload.routes', 'upload.types', 'index'],
   },
-  settings: {
-    name: 'Settings',
-    description: 'Application settings management',
+  mfa: {
+    name: 'MFA/TOTP',
+    description: 'Two-factor authentication with QR codes',
+    files: ['mfa.service', 'mfa.routes', 'totp.ts', 'types.ts', 'index'],
+  },
+  oauth: {
+    name: 'OAuth',
+    description: 'Social login (Google, GitHub, Facebook, Twitter, Apple)',
+    files: ['oauth.service', 'oauth.routes', 'providers', 'types.ts', 'index'],
+  },
+  payment: {
+    name: 'Payments',
+    description: 'Payment processing (Stripe, PayPal, Mobile Money)',
+    files: ['payment.service', 'payment.routes', 'providers', 'types.ts', 'index'],
+  },
+  notification: {
+    name: 'Notifications',
+    description: 'Email, SMS, Push notifications',
+    files: ['notification.service', 'types.ts', 'index'],
+  },
+  'rate-limit': {
+    name: 'Rate Limiting',
+    description: 'Advanced rate limiting with multiple algorithms',
     files: [
-      'settings.service',
-      'settings.controller',
-      'settings.routes',
-      'settings.types',
+      'rate-limit.service',
+      'rate-limit.middleware',
+      'rate-limit.routes',
+      'stores',
+      'types.ts',
       'index',
     ],
+  },
+  webhook: {
+    name: 'Webhooks',
+    description: 'Outgoing webhooks with HMAC signatures & retry',
+    files: ['webhook.service', 'webhook.routes', 'signature.ts', 'retry.ts', 'types.ts', 'index'],
+  },
+  queue: {
+    name: 'Queue/Jobs',
+    description: 'Background jobs with Bull/BullMQ & cron scheduling',
+    files: ['queue.service', 'cron.ts', 'workers.ts', 'routes.ts', 'types.ts', 'index'],
+  },
+  websocket: {
+    name: 'WebSockets',
+    description: 'Real-time communication with Socket.io',
+    files: ['websocket.service', 'features.ts', 'middlewares.ts', 'types.ts', 'index'],
+  },
+  search: {
+    name: 'Search',
+    description: 'Full-text search with Elasticsearch/Meilisearch',
+    files: ['search.service', 'adapters', 'types.ts', 'index'],
+  },
+  i18n: {
+    name: 'i18n/Localization',
+    description: 'Multi-language support with 7+ locales',
+    files: ['i18n.service', 'i18n.middleware', 'i18n.routes', 'types.ts', 'index'],
+  },
+  'feature-flag': {
+    name: 'Feature Flags',
+    description: 'A/B testing & progressive rollout',
+    files: ['feature-flag.service', 'feature-flag.routes', 'types.ts', 'index'],
   },
 };
 
@@ -554,9 +600,19 @@ export interface ${name.charAt(0).toUpperCase() + name.slice(1)}Data {
 }
 
 /**
- * Helper: Generate module files based on type
+ * Helper: Generate module files - copies from existing src/modules if available
  */
 async function generateModuleFiles(moduleName: string, moduleDir: string): Promise<void> {
+  // Check if module exists in src/modules (our new modules)
+  const sourceModuleDir = path.join(process.cwd(), 'src', 'modules', moduleName);
+
+  if (await fileExists(sourceModuleDir)) {
+    // Copy from existing module
+    await copyModuleFromSource(sourceModuleDir, moduleDir);
+    return;
+  }
+
+  // Fallback to old generation methods for basic modules
   switch (moduleName) {
     case 'auth':
       await generateAuthModule(moduleDir);
@@ -578,6 +634,25 @@ async function generateModuleFiles(moduleName: string, moduleDir: string): Promi
       break;
     default:
       await generateGenericModule(moduleDir, moduleName);
+  }
+}
+
+/**
+ * Helper: Copy module from source directory
+ */
+async function copyModuleFromSource(sourceDir: string, targetDir: string): Promise<void> {
+  const entries = await fs.readdir(sourceDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(targetDir, entry.name);
+
+    if (entry.isDirectory()) {
+      await fs.mkdir(targetPath, { recursive: true });
+      await copyModuleFromSource(sourcePath, targetPath);
+    } else {
+      await fs.copyFile(sourcePath, targetPath);
+    }
   }
 }
 
