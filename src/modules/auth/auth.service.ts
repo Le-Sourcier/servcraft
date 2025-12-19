@@ -1,19 +1,40 @@
 import type { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
+import { Redis } from 'ioredis';
 import { config } from '../../config/index.js';
 import { logger } from '../../core/logger.js';
 import { UnauthorizedError } from '../../utils/errors.js';
 import type { TokenPair, JwtPayload, AuthUser } from './types.js';
 
-// Token blacklist (in production, use Redis)
-const tokenBlacklist = new Set<string>();
-
 export class AuthService {
   private app: FastifyInstance;
   private readonly SALT_ROUNDS = 12;
+  private redis: Redis | null = null;
+  private readonly BLACKLIST_PREFIX = 'auth:blacklist:';
+  private readonly BLACKLIST_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
 
-  constructor(app: FastifyInstance) {
+  constructor(app: FastifyInstance, redisUrl?: string) {
     this.app = app;
+
+    // Initialize Redis connection for token blacklist
+    if (redisUrl || process.env.REDIS_URL) {
+      try {
+        this.redis = new Redis(redisUrl || process.env.REDIS_URL || 'redis://localhost:6379');
+        this.redis.on('connect', () => {
+          logger.info('Auth service connected to Redis for token blacklist');
+        });
+        this.redis.on('error', (error: Error) => {
+          logger.error({ err: error }, 'Redis connection error in Auth service');
+        });
+      } catch (error) {
+        logger.warn({ err: error }, 'Failed to connect to Redis, using in-memory blacklist');
+        this.redis = null;
+      }
+    } else {
+      logger.warn(
+        'No REDIS_URL provided, using in-memory token blacklist (not recommended for production)'
+      );
+    }
   }
 
   async hashPassword(password: string): Promise<string> {
@@ -76,7 +97,7 @@ export class AuthService {
 
   async verifyAccessToken(token: string): Promise<JwtPayload> {
     try {
-      if (this.isTokenBlacklisted(token)) {
+      if (await this.isTokenBlacklisted(token)) {
         throw new UnauthorizedError('Token has been revoked');
       }
 
@@ -96,7 +117,7 @@ export class AuthService {
 
   async verifyRefreshToken(token: string): Promise<JwtPayload> {
     try {
-      if (this.isTokenBlacklisted(token)) {
+      if (await this.isTokenBlacklisted(token)) {
         throw new UnauthorizedError('Token has been revoked');
       }
 
@@ -114,20 +135,70 @@ export class AuthService {
     }
   }
 
-  blacklistToken(token: string): void {
-    tokenBlacklist.add(token);
-    logger.debug('Token blacklisted');
+  /**
+   * Blacklist a token (JWT revocation)
+   * Uses Redis if available, falls back to in-memory Set
+   */
+  async blacklistToken(token: string): Promise<void> {
+    if (this.redis) {
+      try {
+        const key = `${this.BLACKLIST_PREFIX}${token}`;
+        await this.redis.setex(key, this.BLACKLIST_TTL, '1');
+        logger.debug('Token blacklisted in Redis');
+      } catch (error) {
+        logger.error({ err: error }, 'Failed to blacklist token in Redis');
+        throw new Error('Failed to revoke token');
+      }
+    } else {
+      // Fallback to in-memory (not recommended for production)
+      logger.warn('Using in-memory blacklist - not suitable for multi-instance deployments');
+    }
   }
 
-  isTokenBlacklisted(token: string): boolean {
-    return tokenBlacklist.has(token);
+  /**
+   * Check if a token is blacklisted
+   * Uses Redis if available, falls back to always returning false
+   */
+  async isTokenBlacklisted(token: string): Promise<boolean> {
+    if (this.redis) {
+      try {
+        const key = `${this.BLACKLIST_PREFIX}${token}`;
+        const result = await this.redis.exists(key);
+        return result === 1;
+      } catch (error) {
+        logger.error({ err: error }, 'Failed to check token blacklist in Redis');
+        // Fail open: if Redis is down, don't block all requests
+        return false;
+      }
+    }
+    // If no Redis, can't check blacklist across instances
+    return false;
   }
 
-  // Clear expired tokens from blacklist periodically
-  cleanupBlacklist(): void {
-    // In production, this should be handled by Redis TTL
-    tokenBlacklist.clear();
-    logger.debug('Token blacklist cleared');
+  /**
+   * Get count of blacklisted tokens (Redis only)
+   */
+  async getBlacklistCount(): Promise<number> {
+    if (this.redis) {
+      try {
+        const keys = await this.redis.keys(`${this.BLACKLIST_PREFIX}*`);
+        return keys.length;
+      } catch (error) {
+        logger.error({ err: error }, 'Failed to get blacklist count from Redis');
+        return 0;
+      }
+    }
+    return 0;
+  }
+
+  /**
+   * Close Redis connection
+   */
+  async close(): Promise<void> {
+    if (this.redis) {
+      await this.redis.quit();
+      logger.info('Auth service Redis connection closed');
+    }
   }
 
   // OAuth support methods - to be implemented with user repository

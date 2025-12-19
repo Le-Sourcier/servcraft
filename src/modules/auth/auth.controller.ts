@@ -107,7 +107,7 @@ export class AuthController {
     }
 
     // Blacklist old refresh token (token rotation)
-    this.authService.blacklistToken(data.refreshToken);
+    await this.authService.blacklistToken(data.refreshToken);
 
     // Generate new tokens
     const tokens = this.authService.generateTokenPair({
@@ -123,7 +123,7 @@ export class AuthController {
     const authHeader = request.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      this.authService.blacklistToken(token);
+      await this.authService.blacklistToken(token);
     }
 
     success(reply, { message: 'Logged out successfully' });

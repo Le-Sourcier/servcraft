@@ -10,13 +10,13 @@ Ce fichier suit en temps réel la progression des corrections du projet.
 
 | Phase | Tâches | Complété | En cours | Restant | % |
 |-------|--------|----------|----------|---------|---|
-| **🔴 Phase 1 : Critique** | 7 | 0 | 0 | 7 | 0% |
+| **🔴 Phase 1 : Critique** | 7 | 1 | 0 | 6 | 14% |
 | **🟡 Phase 2 : Important** | 12 | 0 | 0 | 12 | 0% |
-| **🟢 Phase 3 : Tests** | 9 | 0 | 0 | 9 | 0% |
-| **📚 Phase 4 : Documentation** | 8 | 0 | 0 | 8 | 0% |
+| **🟢 Phase 3 : Tests** | 9 | 1 | 0 | 8 | 11% |
+| **📚 Phase 4 : Documentation** | 9 | 1 | 0 | 8 | 11% |
 | **🔒 Phase 5 : Sécurité** | 6 | 0 | 0 | 6 | 0% |
 | **🚀 Phase 6 : CI/CD** | 7 | 0 | 0 | 7 | 0% |
-| **TOTAL** | **49** | **0** | **0** | **49** | **0%** |
+| **TOTAL** | **50** | **3** | **0** | **47** | **6%** |
 
 ---
 
@@ -24,18 +24,33 @@ Ce fichier suit en temps réel la progression des corrections du projet.
 
 ### 2025-12-19
 
-#### ✅ Tâche complétée : Création de l'infrastructure d'audit
+#### ✅ Tâche complétée : Création de l'infrastructure d'audit (0.5h)
 - **Fichiers créés :**
   - `AUDIT.md` - Rapport d'audit complet avec checklist
   - `docs/PROGRESS.md` - Ce fichier de suivi
-- **Commit :** Initial audit infrastructure
-- **Prochaine étape :** AUTH-001 (Redis blacklist)
+- **Commit :** `docs: add comprehensive audit report and progress tracking`
+- **Statut :** ✅ Complété
+
+#### ✅ Tâche complétée : AUTH-001 - Redis Token Blacklist (4h)
+- **Fichiers modifiés :**
+  - `src/modules/auth/auth.service.ts` - Implémentation Redis
+  - `src/modules/auth/auth.controller.ts` - Méthodes async
+- **Fichiers créés :**
+  - `tests/integration/auth-redis.test.ts` - 16 tests d'intégration
+  - `docs/modules/AUTH.md` - Documentation complète
+- **Changements :**
+  - Migration `Set<string>` → Redis avec TTL (7 jours)
+  - Support multi-instance
+  - Gestion gracieuse des erreurs
+- **Commit :** `feat(auth): implement Redis-based token blacklist`
+- **Statut :** ✅ Complété et testé
+- **Prochaine étape :** USER-001 (Migrer vers Prisma)
 
 ---
 
 ## 🔥 Tâches en cours
 
-*Aucune tâche en cours actuellement*
+*Aucune tâche en cours actuellement - Prêt pour USER-001*
 
 ---
 
@@ -45,6 +60,9 @@ Ce fichier suit en temps réel la progression des corrections du projet.
 - ✅ Création du rapport d'audit complet (`AUDIT.md`)
 - ✅ Création du fichier de progression (`docs/PROGRESS.md`)
 - ✅ Création de la structure de documentation
+
+### Phase 1 - Corrections Critiques (4h - 1/7 complété)
+- ✅ **AUTH-001**: Redis token blacklist implémenté avec tests et documentation
 
 ---
 
@@ -61,20 +79,21 @@ Ce fichier suit en temps réel la progression des corrections du projet.
 ## 📈 Métriques de temps
 
 - **Temps total estimé :** 220 heures
-- **Temps écoulé :** 0.5 heures
-- **Temps restant :** 219.5 heures
-- **Progression :** 0.2%
+- **Temps écoulé :** 4.5 heures
+- **Temps restant :** 215.5 heures
+- **Progression :** 6% (3/50 tâches complétées)
 
 ---
 
 ## 🎯 Objectifs hebdomadaires
 
-### Semaine 1 (en cours)
-- [ ] AUTH-001 : Redis blacklist
-- [ ] USER-001 : Prisma UserRepository
-- [ ] CACHE-001 : Redis connection
-- [ ] TEST-001 : Tests Auth Redis
+### Semaine 1 (en cours - Jour 1 complété)
+- [x] AUTH-001 : Redis blacklist ✅
+- [x] TEST-001 : Tests Auth Redis ✅
+- [x] DOC-002-AUTH : Documentation Auth ✅
+- [ ] USER-001 : Prisma UserRepository (En cours...)
 - [ ] TEST-002 : Tests User Prisma
+- [ ] CACHE-001 : Redis connection
 
 ### Semaine 2 (à venir)
 - [ ] PAYMENT-001 : Prisma payments
@@ -87,9 +106,12 @@ Ce fichier suit en temps réel la progression des corrections du projet.
 ## 🏆 Milestones
 
 ### Milestone 1 : "Production-Ready Core" (Semaine 1-2)
-**Progression : 0/15 tâches (0%)**
-- [ ] PHASE 1 complète
-- [ ] Tests critiques
+**Progression : 3/15 tâches (20%)**
+- [x] AUTH-001 : Redis blacklist ✅
+- [x] TEST-001 : Tests Auth Redis ✅
+- [x] DOC-002-AUTH : Documentation Auth ✅
+- [ ] PHASE 1 restante (6/7 tâches)
+- [ ] Tests critiques restants
 - [ ] Documentation de base
 
 ### Milestone 2 : "Complete Persistence" (Semaine 3-4)
