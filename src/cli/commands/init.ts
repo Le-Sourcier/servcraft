@@ -207,6 +207,30 @@ export const initCommand = new Command('init')
           generateLoggerFile(options)
         );
 
+        // Generate config file
+        await writeFile(
+          path.join(projectDir, `src/config/index.${ext}`),
+          generateConfigFile(options)
+        );
+
+        // Generate middleware file
+        await writeFile(
+          path.join(projectDir, `src/middleware/index.${ext}`),
+          generateMiddlewareFile(options)
+        );
+
+        // Generate utils file
+        await writeFile(
+          path.join(projectDir, `src/utils/index.${ext}`),
+          generateUtilsFile(options)
+        );
+
+        // Generate types file
+        await writeFile(
+          path.join(projectDir, `src/types/index.${ext}`),
+          generateTypesFile(options)
+        );
+
         // Generate database files based on ORM choice
         if (options.orm === 'prisma') {
           await writeFile(
@@ -806,5 +830,183 @@ userSchema.methods.comparePassword = async function(candidatePassword${isTS ? ':
 };
 
 ${isTS ? "export const User = mongoose.model<IUser>('User', userSchema);" : "const User = mongoose.model('User', userSchema);\nmodule.exports = { User };"}
+`;
+}
+
+function generateConfigFile(options: InitOptions): string {
+  const isTS = options.language === 'typescript';
+
+  return `${isTS ? "import 'dotenv/config';" : "require('dotenv').config();"}
+
+${isTS ? 'export const config = {' : 'const config = {'}
+  env: process.env.NODE_ENV || 'development',
+  port: parseInt(process.env.PORT || '3000', 10),
+  host: process.env.HOST || '0.0.0.0',
+
+  jwt: {
+    secret: process.env.JWT_SECRET || 'your-secret-key',
+    accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+  },
+
+  cors: {
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  },
+
+  rateLimit: {
+    max: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
+  },
+
+  log: {
+    level: process.env.LOG_LEVEL || 'info',
+  },
+}${isTS ? ' as const' : ''};
+
+${isTS ? '' : 'module.exports = { config };'}
+`;
+}
+
+function generateMiddlewareFile(options: InitOptions): string {
+  const isTS = options.language === 'typescript';
+
+  return `${
+    isTS
+      ? `import type { FastifyRequest, FastifyReply } from 'fastify';
+import { logger } from '../core/logger.js';`
+      : `const { logger } = require('../core/logger.js');`
+  }
+
+/**
+ * Error handler middleware
+ */
+${isTS ? 'export function errorHandler(error: Error, request: FastifyRequest, reply: FastifyReply): void {' : 'function errorHandler(error, request, reply) {'}
+  logger.error({ err: error, url: request.url, method: request.method }, 'Request error');
+
+  const statusCode = (error${isTS ? ' as any' : ''}).statusCode || 500;
+  const message = statusCode === 500 ? 'Internal Server Error' : error.message;
+
+  reply.status(statusCode).send({
+    success: false,
+    error: message,
+    ...(process.env.NODE_ENV === 'development' && { stack: error.stack }),
+  });
+}
+
+/**
+ * Request logging middleware
+ */
+${isTS ? 'export function requestLogger(request: FastifyRequest, reply: FastifyReply, done: () => void): void {' : 'function requestLogger(request, reply, done) {'}
+  logger.info({ url: request.url, method: request.method, ip: request.ip }, 'Incoming request');
+  done();
+}
+
+${isTS ? '' : 'module.exports = { errorHandler, requestLogger };'}
+`;
+}
+
+function generateUtilsFile(options: InitOptions): string {
+  const isTS = options.language === 'typescript';
+
+  return `/**
+ * Standard API response helper
+ */
+${isTS ? 'export function apiResponse<T>(data: T, message = "Success"): { success: boolean; message: string; data: T }' : 'function apiResponse(data, message = "Success")'} {
+  return {
+    success: true,
+    message,
+    data,
+  };
+}
+
+/**
+ * Error response helper
+ */
+${isTS ? 'export function errorResponse(message: string, code?: string): { success: boolean; error: string; code?: string }' : 'function errorResponse(message, code)'} {
+  return {
+    success: false,
+    error: message,
+    ...(code && { code }),
+  };
+}
+
+/**
+ * Pagination helper
+ */
+${
+  isTS
+    ? `export interface PaginationResult<T> {
+  data: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
+}
+
+export function paginate<T>(data: T[], page: number, limit: number, total: number): PaginationResult<T>`
+    : 'function paginate(data, page, limit, total)'
+} {
+  const totalPages = Math.ceil(total / limit);
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
+    },
+  };
+}
+
+${isTS ? '' : 'module.exports = { apiResponse, errorResponse, paginate };'}
+`;
+}
+
+function generateTypesFile(options: InitOptions): string {
+  if (options.language !== 'typescript') {
+    return '// Types file - not needed for JavaScript\n';
+  }
+
+  return `/**
+ * Common type definitions
+ */
+
+export interface ApiResponse<T = unknown> {
+  success: boolean;
+  message?: string;
+  data?: T;
+  error?: string;
+  code?: string;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
+}
+
+export interface RequestUser {
+  id: string;
+  email: string;
+  role: string;
+}
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    user?: RequestUser;
+  }
+}
 `;
 }
