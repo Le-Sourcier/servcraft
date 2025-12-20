@@ -4,7 +4,10 @@ import { MongooseAdapter } from '../../src/database/adapters/mongoose.adapter.js
 import { MongooseUserRepository } from '../../src/database/repositories/mongoose/user.repository.js';
 import { MongoosePaymentRepository } from '../../src/database/repositories/mongoose/payment.repository.js';
 
-describe('Mongoose Repositories Integration', () => {
+// Skip if MongoDB is not available (requires local MongoDB instance)
+const skipMongo = !process.env.MONGODB_URI && process.env.SKIP_MONGO_TESTS !== 'false';
+
+describe.skipIf(skipMongo)('Mongoose Repositories Integration', () => {
   let adapter: MongooseAdapter;
   let userRepo: MongooseUserRepository;
   let paymentRepo: MongoosePaymentRepository;

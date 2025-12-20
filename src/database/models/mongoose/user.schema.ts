@@ -142,10 +142,11 @@ userSchema.methods.comparePassword = async function (candidatePassword: string):
 
 /**
  * Indexes for better query performance
+ * Note: email index is already defined via unique: true in schema
+ * role and status indexes are defined via index: true in schema
  */
-userSchema.index({ email: 1 });
-userSchema.index({ role: 1, status: 1 });
-userSchema.index({ createdAt: -1 });
+userSchema.index({ role: 1, status: 1 }); // Compound index for filtering
+userSchema.index({ createdAt: -1 }); // For sorting by creation date
 
 /**
  * User Model

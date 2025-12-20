@@ -1,7 +1,36 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { createServer } from 'http';
 import { WebSocketService } from '../../src/modules/websocket/websocket.service.js';
 import { io as ioClient, Socket as ClientSocket } from 'socket.io-client';
+
+// Helper to wait for socket connection
+const waitForConnect = (client: ClientSocket): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('Connection timeout')), 5000);
+    client.on('connect', () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+    client.on('connect_error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+  });
+};
+
+// Helper to wait for event
+const waitForEvent = <T>(client: ClientSocket, event: string, timeout = 2000): Promise<T> => {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timeout waiting for ${event}`)), timeout);
+    client.once(event, (data: T) => {
+      clearTimeout(timer);
+      resolve(data);
+    });
+  });
+};
+
+// Helper to wait for ms
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe('WebSocketService - Socket.io Integration', () => {
   let httpServer: ReturnType<typeof createServer>;
@@ -9,7 +38,7 @@ describe('WebSocketService - Socket.io Integration', () => {
   let serverAddress: string;
   const testPort = 3010;
 
-  beforeAll((done) => {
+  beforeAll(async () => {
     // Create HTTP server
     httpServer = createServer();
 
@@ -28,9 +57,11 @@ describe('WebSocketService - Socket.io Integration', () => {
     wsService.initialize(httpServer);
 
     // Start server
-    httpServer.listen(testPort, () => {
-      serverAddress = `http://localhost:${testPort}`;
-      done();
+    await new Promise<void>((resolve) => {
+      httpServer.listen(testPort, () => {
+        serverAddress = `http://localhost:${testPort}`;
+        resolve();
+      });
     });
   });
 
@@ -52,7 +83,7 @@ describe('WebSocketService - Socket.io Integration', () => {
   // ==========================================
 
   describe('Connection Management', () => {
-    it('should accept client connection', (done) => {
+    it('should accept client connection', async () => {
       const client = ioClient(serverAddress, {
         path: '/socket.io',
         query: {
@@ -61,18 +92,12 @@ describe('WebSocketService - Socket.io Integration', () => {
         },
       });
 
-      client.on('connect', () => {
-        expect(client.connected).toBe(true);
-        client.disconnect();
-        done();
-      });
-
-      client.on('connect_error', (error) => {
-        done(error);
-      });
+      await waitForConnect(client);
+      expect(client.connected).toBe(true);
+      client.disconnect();
     });
 
-    it('should track connected users', (done) => {
+    it('should track connected users', async () => {
       const client = ioClient(serverAddress, {
         query: {
           username: 'user1',
@@ -80,18 +105,15 @@ describe('WebSocketService - Socket.io Integration', () => {
         },
       });
 
-      client.on('connect', () => {
-        // Give some time for handleConnection to process
-        setTimeout(() => {
-          const users = wsService.getConnectedUsers();
-          expect(users.length).toBeGreaterThan(0);
-          client.disconnect();
-          done();
-        }, 100);
-      });
+      await waitForConnect(client);
+      await wait(100);
+
+      const users = wsService.getConnectedUsers();
+      expect(users.length).toBeGreaterThan(0);
+      client.disconnect();
     });
 
-    it('should handle multiple connections', (done) => {
+    it('should handle multiple connections', async () => {
       const client1 = ioClient(serverAddress, {
         query: { username: 'user1', email: 'user1@example.com' },
       });
@@ -99,40 +121,28 @@ describe('WebSocketService - Socket.io Integration', () => {
         query: { username: 'user2', email: 'user2@example.com' },
       });
 
-      let connected = 0;
-      const checkConnections = () => {
-        connected++;
-        if (connected === 2) {
-          setTimeout(() => {
-            const users = wsService.getConnectedUsers();
-            expect(users.length).toBeGreaterThanOrEqual(2);
-            client1.disconnect();
-            client2.disconnect();
-            done();
-          }, 100);
-        }
-      };
+      await Promise.all([waitForConnect(client1), waitForConnect(client2)]);
+      await wait(100);
 
-      client1.on('connect', checkConnections);
-      client2.on('connect', checkConnections);
+      const users = wsService.getConnectedUsers();
+      expect(users.length).toBeGreaterThanOrEqual(2);
+
+      client1.disconnect();
+      client2.disconnect();
     });
 
-    it('should handle disconnection', (done) => {
+    it('should handle disconnection', async () => {
       const client = ioClient(serverAddress, {
         query: { username: 'disconnectuser', email: 'disconnect@example.com' },
       });
 
-      client.on('connect', () => {
-        const socketId = client.id;
+      await waitForConnect(client);
+      const socketId = client.id;
+      client.disconnect();
 
-        client.disconnect();
-
-        setTimeout(() => {
-          const user = wsService.getUser(socketId);
-          expect(user).toBeUndefined();
-          done();
-        }, 100);
-      });
+      await wait(100);
+      const user = wsService.getUser(socketId);
+      expect(user).toBeUndefined();
     });
   });
 
@@ -143,11 +153,11 @@ describe('WebSocketService - Socket.io Integration', () => {
   describe('Room Management', () => {
     let client: ClientSocket;
 
-    beforeEach((done) => {
+    beforeEach(async () => {
       client = ioClient(serverAddress, {
         query: { username: 'roomuser', email: 'room@example.com' },
       });
-      client.on('connect', () => done());
+      await waitForConnect(client);
     });
 
     afterEach(() => {
@@ -163,32 +173,25 @@ describe('WebSocketService - Socket.io Integration', () => {
       expect(room.namespace).toBe('default');
     });
 
-    it('should join room', (done) => {
-      wsService.createRoom('joinroom', 'default').then((room) => {
-        client.emit('room:join', { roomId: room.id });
+    it('should join room', async () => {
+      const room = await wsService.createRoom('joinroom', 'default');
+      client.emit('room:join', { roomId: room.id });
 
-        setTimeout(() => {
-          const members = wsService.getRoomMembers(room.id);
-          expect(members.length).toBeGreaterThan(0);
-          done();
-        }, 100);
-      });
+      await wait(100);
+      const members = wsService.getRoomMembers(room.id);
+      expect(members.length).toBeGreaterThan(0);
     });
 
-    it('should leave room', (done) => {
-      wsService.createRoom('leaveroom', 'default').then((room) => {
-        client.emit('room:join', { roomId: room.id });
+    it('should leave room', async () => {
+      const room = await wsService.createRoom('leaveroom', 'default');
+      client.emit('room:join', { roomId: room.id });
+      await wait(100);
 
-        setTimeout(() => {
-          client.emit('room:leave', { roomId: room.id });
+      client.emit('room:leave', { roomId: room.id });
+      await wait(100);
 
-          setTimeout(() => {
-            const members = wsService.getRoomMembers(room.id);
-            expect(members.length).toBe(0);
-            done();
-          }, 100);
-        }, 100);
-      });
+      const members = wsService.getRoomMembers(room.id);
+      expect(members.length).toBe(0);
     });
 
     it('should list rooms', async () => {
@@ -219,18 +222,16 @@ describe('WebSocketService - Socket.io Integration', () => {
     let client: ClientSocket;
     let roomId: string;
 
-    beforeEach((done) => {
+    beforeEach(async () => {
       client = ioClient(serverAddress, {
         query: { username: 'msguser', email: 'msg@example.com' },
       });
 
-      client.on('connect', () => {
-        wsService.createRoom('msgroom', 'default').then((room) => {
-          roomId = room.id;
-          client.emit('room:join', { roomId });
-          setTimeout(() => done(), 100);
-        });
-      });
+      await waitForConnect(client);
+      const room = await wsService.createRoom('msgroom', 'default');
+      roomId = room.id;
+      client.emit('room:join', { roomId });
+      await wait(100);
     });
 
     afterEach(() => {
@@ -239,64 +240,47 @@ describe('WebSocketService - Socket.io Integration', () => {
       }
     });
 
-    it('should send message to room', (done) => {
-      client.on('message', (message) => {
-        expect(message.content).toBe('Hello room!');
-        expect(message.roomId).toBe(roomId);
-        done();
+    it('should send message to room', async () => {
+      const messagePromise = waitForEvent<{ content: string; roomId: string }>(client, 'message');
+
+      await wait(100);
+      client.emit('message', {
+        roomId,
+        content: 'Hello room!',
+        type: 'text',
       });
 
-      setTimeout(() => {
-        client.emit('message', {
-          roomId,
-          content: 'Hello room!',
-          type: 'text',
-        });
-      }, 100);
+      const message = await messagePromise;
+      expect(message.content).toBe('Hello room!');
+      expect(message.roomId).toBe(roomId);
     });
 
-    it('should store message history', (done) => {
-      setTimeout(() => {
-        const user = wsService.getUser(client.id);
-        if (!user) {
-          done(new Error('User not found - connection not tracked yet'));
-          return;
-        }
+    it('should store message history', async () => {
+      await wait(200);
+      const user = wsService.getUser(client.id);
+      if (!user) {
+        throw new Error('User not found');
+      }
 
-        wsService
-          .sendMessage(roomId, user.id, 'Message 1', 'text')
-          .then(() => {
-            return wsService.sendMessage(roomId, user.id, 'Message 2', 'text');
-          })
-          .then(() => {
-            const messages = wsService.getRoomMessages(roomId);
-            expect(messages.length).toBeGreaterThanOrEqual(2);
-            done();
-          })
-          .catch(done);
-      }, 200);
+      await wsService.sendMessage(roomId, user.id, 'Message 1', 'text');
+      await wsService.sendMessage(roomId, user.id, 'Message 2', 'text');
+
+      const messages = wsService.getRoomMessages(roomId);
+      expect(messages.length).toBeGreaterThanOrEqual(2);
     });
 
-    it('should handle different message types', (done) => {
-      setTimeout(() => {
-        const user = wsService.getUser(client.id);
-        if (!user) {
-          done(new Error('User not found - connection not tracked yet'));
-          return;
-        }
+    it('should handle different message types', async () => {
+      await wait(200);
+      const user = wsService.getUser(client.id);
+      if (!user) {
+        throw new Error('User not found');
+      }
 
-        wsService
-          .sendMessage(roomId, user.id, 'Text', 'text')
-          .then((textMsg) => {
-            expect(textMsg.type).toBe('text');
-            return wsService.sendMessage(roomId, user.id, 'System', 'system');
-          })
-          .then((systemMsg) => {
-            expect(systemMsg.type).toBe('system');
-            done();
-          })
-          .catch(done);
-      }, 200);
+      const textMsg = await wsService.sendMessage(roomId, user.id, 'Text', 'text');
+      expect(textMsg.type).toBe('text');
+
+      const systemMsg = await wsService.sendMessage(roomId, user.id, 'System', 'system');
+      expect(systemMsg.type).toBe('system');
     });
   });
 
@@ -309,21 +293,7 @@ describe('WebSocketService - Socket.io Integration', () => {
     let client2: ClientSocket;
     let roomId: string;
 
-    beforeEach((done) => {
-      let connected = 0;
-
-      const checkReady = () => {
-        connected++;
-        if (connected === 2) {
-          wsService.createRoom('broadcast-room', 'default').then((room) => {
-            roomId = room.id;
-            client1.emit('room:join', { roomId });
-            client2.emit('room:join', { roomId });
-            setTimeout(() => done(), 100);
-          });
-        }
-      };
-
+    beforeEach(async () => {
       client1 = ioClient(serverAddress, {
         query: { username: 'broadcaster1', email: 'b1@example.com' },
       });
@@ -331,8 +301,13 @@ describe('WebSocketService - Socket.io Integration', () => {
         query: { username: 'broadcaster2', email: 'b2@example.com' },
       });
 
-      client1.on('connect', checkReady);
-      client2.on('connect', checkReady);
+      await Promise.all([waitForConnect(client1), waitForConnect(client2)]);
+
+      const room = await wsService.createRoom('broadcast-room', 'default');
+      roomId = room.id;
+      client1.emit('room:join', { roomId });
+      client2.emit('room:join', { roomId });
+      await wait(100);
     });
 
     afterEach(() => {
@@ -340,70 +315,55 @@ describe('WebSocketService - Socket.io Integration', () => {
       if (client2.connected) client2.disconnect();
     });
 
-    it('should broadcast to room', (done) => {
-      let received = 0;
+    it('should broadcast to room', async () => {
+      const promise1 = waitForEvent<{ message: string }>(client1, 'test-event');
+      const promise2 = waitForEvent<{ message: string }>(client2, 'test-event');
 
-      const listener = (data: { message: string }) => {
-        expect(data.message).toBe('Broadcast test');
-        received++;
-        if (received === 2) {
-          done();
+      await wait(100);
+      wsService.broadcastToRoom(roomId, 'test-event', { message: 'Broadcast test' });
+
+      const [data1, data2] = await Promise.all([promise1, promise2]);
+      expect(data1.message).toBe('Broadcast test');
+      expect(data2.message).toBe('Broadcast test');
+    });
+
+    it('should broadcast to room except sender', async () => {
+      const promise = waitForEvent<{ message: string }>(client2, 'test-except');
+
+      await wait(100);
+      wsService.broadcastToRoom(
+        roomId,
+        'test-except',
+        { message: 'Not for sender' },
+        {
+          except: [client1.id],
         }
-      };
+      );
 
-      client1.on('test-event', listener);
-      client2.on('test-event', listener);
-
-      setTimeout(() => {
-        wsService.broadcastToRoom(roomId, 'test-event', { message: 'Broadcast test' });
-      }, 100);
+      const data = await promise;
+      expect(data.message).toBe('Not for sender');
     });
 
-    it('should broadcast to room except sender', (done) => {
-      client2.on('test-except', (data: { message: string }) => {
-        expect(data.message).toBe('Not for sender');
-        done();
-      });
+    it('should broadcast to all users', async () => {
+      const promise1 = waitForEvent<{ type: string }>(client1, 'global-event');
+      const promise2 = waitForEvent<{ type: string }>(client2, 'global-event');
 
-      setTimeout(() => {
-        wsService.broadcastToRoom(
-          roomId,
-          'test-except',
-          { message: 'Not for sender' },
-          {
-            except: [client1.id],
-          }
-        );
-      }, 100);
+      await wait(100);
+      wsService.broadcastToAll('global-event', { type: 'announcement' });
+
+      const [data1, data2] = await Promise.all([promise1, promise2]);
+      expect(data1.type).toBe('announcement');
+      expect(data2.type).toBe('announcement');
     });
 
-    it('should broadcast to all users', (done) => {
-      let received = 0;
+    it('should emit to specific socket', async () => {
+      const promise = waitForEvent<{ text: string }>(client1, 'private-message');
 
-      const listener = () => {
-        received++;
-        if (received === 2) {
-          done();
-        }
-      };
+      await wait(100);
+      wsService.emitToSocket(client1.id, 'private-message', { text: 'Just for you' });
 
-      client1.on('global-event', listener);
-      client2.on('global-event', listener);
-
-      setTimeout(() => {
-        wsService.broadcastToAll('global-event', { type: 'announcement' });
-      }, 100);
-    });
-
-    it('should emit to specific socket', (done) => {
-      client1.on('private-message', (data: { text: string }) => {
-        expect(data.text).toBe('Just for you');
-        done();
-      });
-
-      setTimeout(() => {
-        wsService.emitToSocket(client1.id, 'private-message', { text: 'Just for you' });
-      }, 100);
+      const data = await promise;
+      expect(data.text).toBe('Just for you');
     });
   });
 
@@ -416,21 +376,7 @@ describe('WebSocketService - Socket.io Integration', () => {
     let client2: ClientSocket;
     let roomId: string;
 
-    beforeEach((done) => {
-      let connected = 0;
-
-      const checkReady = () => {
-        connected++;
-        if (connected === 2) {
-          wsService.createRoom('typing-room', 'default').then((room) => {
-            roomId = room.id;
-            client1.emit('room:join', { roomId });
-            client2.emit('room:join', { roomId });
-            setTimeout(() => done(), 100);
-          });
-        }
-      };
-
+    beforeEach(async () => {
       client1 = ioClient(serverAddress, {
         query: { username: 'typist1', email: 't1@example.com' },
       });
@@ -438,8 +384,13 @@ describe('WebSocketService - Socket.io Integration', () => {
         query: { username: 'typist2', email: 't2@example.com' },
       });
 
-      client1.on('connect', checkReady);
-      client2.on('connect', checkReady);
+      await Promise.all([waitForConnect(client1), waitForConnect(client2)]);
+
+      const room = await wsService.createRoom('typing-room', 'default');
+      roomId = room.id;
+      client1.emit('room:join', { roomId });
+      client2.emit('room:join', { roomId });
+      await wait(100);
     });
 
     afterEach(() => {
@@ -447,27 +398,24 @@ describe('WebSocketService - Socket.io Integration', () => {
       if (client2.connected) client2.disconnect();
     });
 
-    it('should broadcast typing indicator', (done) => {
-      client2.on('typing', (data: { userId: string; isTyping: boolean }) => {
-        expect(data.isTyping).toBe(true);
-        done();
-      });
+    it('should broadcast typing indicator', async () => {
+      const promise = waitForEvent<{ userId: string; isTyping: boolean }>(client2, 'typing');
 
-      setTimeout(() => {
-        client1.emit('typing', { roomId, isTyping: true });
-      }, 100);
+      await wait(100);
+      client1.emit('typing', { roomId, isTyping: true });
+
+      const data = await promise;
+      expect(data.isTyping).toBe(true);
     });
 
-    it('should broadcast stop typing', (done) => {
-      client2.on('typing', (data: { userId: string; isTyping: boolean }) => {
-        if (!data.isTyping) {
-          done();
-        }
-      });
+    it('should broadcast stop typing', async () => {
+      const promise = waitForEvent<{ userId: string; isTyping: boolean }>(client2, 'typing');
 
-      setTimeout(() => {
-        client1.emit('typing', { roomId, isTyping: false });
-      }, 100);
+      await wait(100);
+      client1.emit('typing', { roomId, isTyping: false });
+
+      const data = await promise;
+      expect(data.isTyping).toBe(false);
     });
   });
 
@@ -476,7 +424,7 @@ describe('WebSocketService - Socket.io Integration', () => {
   // ==========================================
 
   describe('Statistics', () => {
-    it('should track connection stats', async () => {
+    it('should track connection stats', () => {
       const stats = wsService.getStats();
       expect(stats).toHaveProperty('totalConnections');
       expect(stats).toHaveProperty('activeConnections');
@@ -501,11 +449,11 @@ describe('WebSocketService - Socket.io Integration', () => {
   describe('User Management', () => {
     let client: ClientSocket;
 
-    beforeEach((done) => {
+    beforeEach(async () => {
       client = ioClient(serverAddress, {
         query: { username: 'manageduser', email: 'managed@example.com' },
       });
-      client.on('connect', () => done());
+      await waitForConnect(client);
     });
 
     afterEach(() => {
@@ -514,7 +462,8 @@ describe('WebSocketService - Socket.io Integration', () => {
       }
     });
 
-    it('should check if user is online', () => {
+    it('should check if user is online', async () => {
+      await wait(100);
       const user = wsService.getUser(client.id);
       if (user) {
         const isOnline = wsService.isUserOnline(user.id);
@@ -522,7 +471,8 @@ describe('WebSocketService - Socket.io Integration', () => {
       }
     });
 
-    it('should get user sockets', () => {
+    it('should get user sockets', async () => {
+      await wait(100);
       const user = wsService.getUser(client.id);
       if (user) {
         const sockets = wsService.getUserSockets(user.id);
@@ -530,25 +480,23 @@ describe('WebSocketService - Socket.io Integration', () => {
       }
     });
 
-    it('should forcefully disconnect user', (done) => {
-      setTimeout(() => {
-        const user = wsService.getUser(client.id);
-        if (!user) {
-          // Skip test if user not connected yet
-          done();
-          return;
-        }
+    it('should forcefully disconnect user', async () => {
+      await wait(200);
+      const user = wsService.getUser(client.id);
+      if (!user) {
+        return; // Skip test if user not connected yet
+      }
 
-        client.on('disconnect', () => {
-          setTimeout(() => {
-            const isOnline = wsService.isUserOnline(user.id);
-            expect(isOnline).toBe(false);
-            done();
-          }, 100);
-        });
+      const disconnectPromise = new Promise<void>((resolve) => {
+        client.on('disconnect', () => resolve());
+      });
 
-        wsService.disconnectUser(user.id, 'admin_action');
-      }, 200);
+      wsService.disconnectUser(user.id, 'admin_action');
+      await disconnectPromise;
+      await wait(100);
+
+      const isOnline = wsService.isUserOnline(user.id);
+      expect(isOnline).toBe(false);
     });
   });
 
@@ -559,11 +507,11 @@ describe('WebSocketService - Socket.io Integration', () => {
   describe('Error Handling', () => {
     let client: ClientSocket;
 
-    beforeEach((done) => {
+    beforeEach(async () => {
       client = ioClient(serverAddress, {
         query: { username: 'erroruser', email: 'error@example.com' },
       });
-      client.on('connect', () => done());
+      await waitForConnect(client);
     });
 
     afterEach(() => {
@@ -572,25 +520,23 @@ describe('WebSocketService - Socket.io Integration', () => {
       }
     });
 
-    it('should handle joining non-existent room', (done) => {
-      client.on('error', (error: { message: string }) => {
-        expect(error.message).toContain('Failed to join room');
-        done();
-      });
-
+    it('should handle joining non-existent room', async () => {
+      const promise = waitForEvent<{ message: string }>(client, 'error');
       client.emit('room:join', { roomId: 'non-existent-room' });
+
+      const error = await promise;
+      expect(error.message).toContain('Failed to join room');
     });
 
-    it('should handle sending message to non-existent room', (done) => {
-      client.on('error', (error: { message: string }) => {
-        expect(error.message).toContain('Failed to send message');
-        done();
-      });
-
+    it('should handle sending message to non-existent room', async () => {
+      const promise = waitForEvent<{ message: string }>(client, 'error');
       client.emit('message', {
         roomId: 'non-existent-room',
         content: 'Test message',
       });
+
+      const error = await promise;
+      expect(error.message).toContain('Failed to send message');
     });
 
     it('should handle concurrent operations', async () => {

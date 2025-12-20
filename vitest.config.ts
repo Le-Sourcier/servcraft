@@ -6,17 +6,12 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.ts', 'tests/**/*.spec.ts'],
     exclude: ['node_modules', 'dist'],
+    // Run integration tests sequentially to avoid DB conflicts
+    fileParallelism: false,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      exclude: [
-        'node_modules',
-        'dist',
-        'tests',
-        '**/*.d.ts',
-        '**/*.config.*',
-        '**/types.ts',
-      ],
+      exclude: ['node_modules', 'dist', 'tests', '**/*.d.ts', '**/*.config.*', '**/types.ts'],
     },
     testTimeout: 10000,
     hookTimeout: 10000,

@@ -1,0 +1,18 @@
+# Code Owners for Servcraft
+# These owners will be automatically requested for review
+
+# Default owners for everything
+* @le-sourcier
+
+# Core modules require review
+/src/core/ @le-sourcier
+/src/database/ @le-sourcier
+
+# Security modules require careful review
+/src/modules/security/ @le-sourcier
+/src/modules/auth/ @le-sourcier
+
+# CI/CD changes
+/.github/ @le-sourcier
+/Dockerfile* @le-sourcier
+/docker-compose* @le-sourcier

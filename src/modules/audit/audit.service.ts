@@ -1,24 +1,20 @@
-import { randomUUID } from 'crypto';
 import { logger } from '../../core/logger.js';
 import type { AuditLogEntry, AuditLogQuery } from './types.js';
 import type { PaginatedResult } from '../../types/index.js';
-import { createPaginatedResult } from '../../utils/pagination.js';
-
-// In-memory storage (will be replaced by Prisma in production)
-const auditLogs: Map<string, AuditLogEntry & { id: string; createdAt: Date }> = new Map();
+import { AuditRepository, type AuditLogRecord } from './audit.repository.js';
+import { prisma } from '../../database/prisma.js';
 
 export class AuditService {
+  private repository: AuditRepository;
+
+  constructor() {
+    this.repository = new AuditRepository(prisma);
+  }
+
   async log(entry: AuditLogEntry): Promise<void> {
-    const id = randomUUID();
-    const auditEntry = {
-      ...entry,
-      id,
-      createdAt: new Date(),
-    };
+    await this.repository.create(entry);
 
-    auditLogs.set(id, auditEntry);
-
-    // Also log to structured logger
+    // Also log to structured logger for real-time monitoring
     logger.info(
       {
         audit: true,
@@ -32,57 +28,20 @@ export class AuditService {
     );
   }
 
-  async query(
-    params: AuditLogQuery
-  ): Promise<PaginatedResult<AuditLogEntry & { id: string; createdAt: Date }>> {
-    const { page = 1, limit = 20 } = params;
-    let logs = Array.from(auditLogs.values());
-
-    // Apply filters
-    if (params.userId) {
-      logs = logs.filter((log) => log.userId === params.userId);
-    }
-    if (params.action) {
-      logs = logs.filter((log) => log.action === params.action);
-    }
-    if (params.resource) {
-      logs = logs.filter((log) => log.resource === params.resource);
-    }
-    if (params.resourceId) {
-      logs = logs.filter((log) => log.resourceId === params.resourceId);
-    }
-    if (params.startDate) {
-      logs = logs.filter((log) => log.createdAt >= params.startDate!);
-    }
-    if (params.endDate) {
-      logs = logs.filter((log) => log.createdAt <= params.endDate!);
-    }
-
-    // Sort by date descending
-    logs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-    const total = logs.length;
-    const skip = (page - 1) * limit;
-    const data = logs.slice(skip, skip + limit);
-
-    return createPaginatedResult(data, total, { page, limit });
+  async query(params: AuditLogQuery): Promise<PaginatedResult<AuditLogRecord>> {
+    return this.repository.query(params);
   }
 
-  async findByUser(
-    userId: string,
-    limit = 50
-  ): Promise<(AuditLogEntry & { id: string; createdAt: Date })[]> {
-    const result = await this.query({ userId, limit });
-    return result.data;
+  async findByUser(userId: string, limit = 50): Promise<AuditLogRecord[]> {
+    return this.repository.findByUser(userId, limit);
   }
 
   async findByResource(
     resource: string,
     resourceId: string,
     limit = 50
-  ): Promise<(AuditLogEntry & { id: string; createdAt: Date })[]> {
-    const result = await this.query({ resource, resourceId, limit });
-    return result.data;
+  ): Promise<AuditLogRecord[]> {
+    return this.repository.findByResource(resource, resourceId, limit);
   }
 
   // Shortcut methods for common audit events
@@ -172,9 +131,18 @@ export class AuditService {
     });
   }
 
+  // Data retention: delete old logs
+  async cleanupOldLogs(retentionDays: number): Promise<number> {
+    const count = await this.repository.deleteOlderThan(retentionDays);
+    if (count > 0) {
+      logger.info({ count, retentionDays }, 'Cleaned up old audit logs');
+    }
+    return count;
+  }
+
   // Clear all logs (for testing)
   async clear(): Promise<void> {
-    auditLogs.clear();
+    await this.repository.clear();
   }
 }
 

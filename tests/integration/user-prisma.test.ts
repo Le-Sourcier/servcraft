@@ -277,11 +277,11 @@ describe('UserRepository - Prisma Integration', () => {
     it('should paginate results', async () => {
       const page1 = await repository.findMany({ page: 1, limit: 2 });
       expect(page1.data).toHaveLength(2);
-      expect(page1.meta.hasMore).toBe(true);
+      expect(page1.meta.hasNextPage).toBe(true);
 
       const page2 = await repository.findMany({ page: 2, limit: 2 });
       expect(page2.data).toHaveLength(2);
-      expect(page2.meta.hasMore).toBe(false);
+      expect(page2.meta.hasNextPage).toBe(false);
     });
 
     it('should filter by role', async () => {
@@ -325,7 +325,10 @@ describe('UserRepository - Prisma Integration', () => {
         sortOrder: 'asc',
       });
 
-      expect(result.data[0]?.email).toBeLessThan(result.data[1]?.email || '');
+      // Compare strings alphabetically
+      const email1 = result.data[0]?.email || '';
+      const email2 = result.data[1]?.email || '';
+      expect(email1.localeCompare(email2)).toBeLessThan(0);
     });
 
     it('should combine multiple filters', async () => {

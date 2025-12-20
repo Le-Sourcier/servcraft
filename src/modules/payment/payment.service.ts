@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto';
 import { logger } from '../../core/logger.js';
 import { NotFoundError, BadRequestError } from '../../utils/errors.js';
 import type {
@@ -15,11 +14,8 @@ import type {
 import { StripeProvider } from './providers/stripe.provider.js';
 import { PayPalProvider } from './providers/paypal.provider.js';
 import { MobileMoneyProvider } from './providers/mobile-money.provider.js';
-
-// In-memory storage (replace with database in production)
-const payments = new Map<string, Payment>();
-const subscriptions = new Map<string, Subscription>();
-const plans = new Map<string, Plan>();
+import type { PaymentRepository } from './payment.repository.js';
+import { createPaymentRepository } from './payment.repository.js';
 
 export interface PaymentServiceConfig {
   stripe?: StripeConfig;
@@ -31,8 +27,11 @@ export class PaymentService {
   private stripeProvider?: StripeProvider;
   private paypalProvider?: PayPalProvider;
   private mobileMoneyProvider?: MobileMoneyProvider;
+  private repository: PaymentRepository;
 
   constructor(config: PaymentServiceConfig = {}) {
+    this.repository = createPaymentRepository();
+
     if (config.stripe) {
       this.stripeProvider = new StripeProvider(config.stripe);
     }
@@ -46,20 +45,7 @@ export class PaymentService {
 
   // Payment methods
   async createPayment(data: CreatePaymentData): Promise<PaymentIntent> {
-    const payment: Payment = {
-      id: randomUUID(),
-      userId: data.userId,
-      provider: data.provider,
-      method: data.method || 'card',
-      status: 'pending',
-      amount: data.amount,
-      currency: data.currency,
-      description: data.description,
-      metadata: data.metadata,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
+    let providerPaymentId: string | undefined;
     let intent: PaymentIntent;
 
     switch (data.provider) {
@@ -73,7 +59,7 @@ export class PaymentService {
           description: data.description,
           metadata: data.metadata as Record<string, string>,
         });
-        payment.providerPaymentId = intent.id;
+        providerPaymentId = intent.id;
         break;
 
       case 'paypal':
@@ -87,7 +73,7 @@ export class PaymentService {
           returnUrl: data.returnUrl || '',
           cancelUrl: data.cancelUrl || '',
         });
-        payment.providerPaymentId = intent.id;
+        providerPaymentId = intent.id;
         break;
 
       case 'mobile_money': {
@@ -104,19 +90,30 @@ export class PaymentService {
           phoneNumber,
           description: data.description,
         });
-        payment.providerPaymentId = intent.id;
+        providerPaymentId = intent.id;
         break;
       }
 
       default:
         intent = {
-          id: payment.id,
+          id: '', // Will be set after payment creation
           status: 'pending',
           provider: 'manual',
         };
     }
 
-    payments.set(payment.id, payment);
+    // Create payment in database
+    const payment = await this.repository.createPayment({
+      userId: data.userId,
+      provider: data.provider,
+      method: data.method || 'card',
+      amount: data.amount,
+      currency: data.currency,
+      description: data.description,
+      metadata: data.metadata,
+      providerPaymentId,
+    });
+
     logger.info({ paymentId: payment.id, provider: data.provider }, 'Payment created');
 
     return {
@@ -126,7 +123,7 @@ export class PaymentService {
   }
 
   async confirmPayment(paymentId: string): Promise<Payment> {
-    const payment = payments.get(paymentId);
+    const payment = await this.repository.findPaymentById(paymentId);
     if (!payment) {
       throw new NotFoundError('Payment');
     }
@@ -135,17 +132,20 @@ export class PaymentService {
       await this.stripeProvider.confirmPayment(payment.providerPaymentId);
     }
 
-    payment.status = 'completed';
-    payment.paidAt = new Date();
-    payment.updatedAt = new Date();
-    payments.set(paymentId, payment);
+    const updatedPayment = await this.repository.updatePaymentStatus(paymentId, 'completed', {
+      paidAt: new Date(),
+    });
+
+    if (!updatedPayment) {
+      throw new NotFoundError('Payment');
+    }
 
     logger.info({ paymentId }, 'Payment confirmed');
-    return payment;
+    return updatedPayment;
   }
 
   async refundPayment(paymentId: string, amount?: number): Promise<Payment> {
-    const payment = payments.get(paymentId);
+    const payment = await this.repository.findPaymentById(paymentId);
     if (!payment) {
       throw new NotFoundError('Payment');
     }
@@ -166,27 +166,25 @@ export class PaymentService {
       );
     }
 
-    payment.status = 'refunded';
-    payment.refundedAmount = refundAmount;
-    payment.updatedAt = new Date();
-    payments.set(paymentId, payment);
+    const updatedPayment = await this.repository.updatePaymentStatus(paymentId, 'refunded', {
+      refundedAmount: refundAmount,
+    });
+
+    if (!updatedPayment) {
+      throw new NotFoundError('Payment');
+    }
 
     logger.info({ paymentId, refundAmount }, 'Payment refunded');
-    return payment;
+    return updatedPayment;
   }
 
   async getPayment(paymentId: string): Promise<Payment | null> {
-    return payments.get(paymentId) || null;
+    return this.repository.findPaymentById(paymentId);
   }
 
   async getUserPayments(userId: string): Promise<Payment[]> {
-    const userPayments: Payment[] = [];
-    for (const payment of payments.values()) {
-      if (payment.userId === userId) {
-        userPayments.push(payment);
-      }
-    }
-    return userPayments.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const result = await this.repository.findUserPayments(userId, { page: 1, limit: 100 });
+    return result.data;
   }
 
   // Subscription methods
@@ -195,74 +193,69 @@ export class PaymentService {
     planId: string,
     provider: PaymentProvider = 'stripe'
   ): Promise<Subscription> {
-    const plan = plans.get(planId);
+    const plan = await this.repository.findPlanById(planId);
     if (!plan) {
       throw new NotFoundError('Plan');
     }
 
-    const subscription: Subscription = {
-      id: randomUUID(),
+    const currentPeriodStart = new Date();
+    const currentPeriodEnd = this.calculatePeriodEnd(plan);
+
+    const subscription = await this.repository.createSubscription({
       userId,
       planId,
       provider,
-      status: 'active',
-      currentPeriodStart: new Date(),
-      currentPeriodEnd: this.calculatePeriodEnd(plan),
-      cancelAtPeriodEnd: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+      currentPeriodStart,
+      currentPeriodEnd,
+    });
 
-    subscriptions.set(subscription.id, subscription);
     logger.info({ subscriptionId: subscription.id, planId }, 'Subscription created');
-
     return subscription;
   }
 
   async cancelSubscription(subscriptionId: string): Promise<Subscription> {
-    const subscription = subscriptions.get(subscriptionId);
+    const subscription = await this.repository.cancelSubscription(subscriptionId);
     if (!subscription) {
       throw new NotFoundError('Subscription');
     }
-
-    subscription.cancelAtPeriodEnd = true;
-    subscription.updatedAt = new Date();
-    subscriptions.set(subscriptionId, subscription);
 
     logger.info({ subscriptionId }, 'Subscription cancelled');
     return subscription;
   }
 
   async getSubscription(subscriptionId: string): Promise<Subscription | null> {
-    return subscriptions.get(subscriptionId) || null;
+    return this.repository.findSubscriptionById(subscriptionId);
   }
 
   async getUserSubscriptions(userId: string): Promise<Subscription[]> {
-    const userSubs: Subscription[] = [];
-    for (const sub of subscriptions.values()) {
-      if (sub.userId === userId) {
-        userSubs.push(sub);
-      }
-    }
-    return userSubs;
+    return this.repository.findUserSubscriptions(userId);
   }
 
   // Plan methods
   async createPlan(planData: Omit<Plan, 'id'>): Promise<Plan> {
-    const plan: Plan = {
-      id: randomUUID(),
-      ...planData,
-    };
-    plans.set(plan.id, plan);
+    const plan = await this.repository.createPlan({
+      name: planData.name,
+      description: planData.description,
+      amount: planData.amount,
+      currency: planData.currency,
+      interval: planData.interval,
+      intervalCount: planData.intervalCount,
+      trialDays: planData.trialDays,
+      features: planData.features,
+      metadata: planData.metadata,
+      active: planData.active,
+    });
+
+    logger.info({ planId: plan.id }, 'Plan created');
     return plan;
   }
 
   async getPlans(): Promise<Plan[]> {
-    return Array.from(plans.values()).filter((p) => p.active);
+    return this.repository.findActivePlans();
   }
 
   async getPlan(planId: string): Promise<Plan | null> {
-    return plans.get(planId) || null;
+    return this.repository.findPlanById(planId);
   }
 
   // Webhook handling
@@ -294,33 +287,38 @@ export class PaymentService {
   private async processStripeEvent(event: Record<string, unknown>): Promise<void> {
     const type = event.type as string;
     const data = event.data as { object: Record<string, unknown> };
+    const providerPaymentId = data.object.id as string;
+
+    // Store webhook event
+    await this.repository.storeWebhookEvent({
+      provider: 'stripe',
+      type,
+      data: data.object,
+    });
+
+    // Find payment by provider payment ID
+    const payment = await this.repository.findPaymentByProviderPaymentId(providerPaymentId);
+    if (!payment) {
+      logger.warn({ providerPaymentId, type }, 'Payment not found for webhook event');
+      return;
+    }
 
     switch (type) {
       case 'payment_intent.succeeded':
-        // Find and update payment
-        for (const payment of payments.values()) {
-          if (payment.providerPaymentId === data.object.id) {
-            payment.status = 'completed';
-            payment.paidAt = new Date();
-            payment.updatedAt = new Date();
-            payments.set(payment.id, payment);
-            break;
-          }
-        }
+        await this.repository.updatePaymentStatus(payment.id, 'completed', {
+          paidAt: new Date(),
+        });
+        logger.info({ paymentId: payment.id }, 'Payment completed via webhook');
         break;
-      case 'payment_intent.payment_failed':
-        for (const payment of payments.values()) {
-          if (payment.providerPaymentId === data.object.id) {
-            payment.status = 'failed';
-            payment.failureReason = (
-              data.object.last_payment_error as { message?: string }
-            )?.message;
-            payment.updatedAt = new Date();
-            payments.set(payment.id, payment);
-            break;
-          }
-        }
+
+      case 'payment_intent.payment_failed': {
+        const failureReason = (data.object.last_payment_error as { message?: string })?.message;
+        await this.repository.updatePaymentStatus(payment.id, 'failed', {
+          failureReason,
+        });
+        logger.info({ paymentId: payment.id, failureReason }, 'Payment failed via webhook');
         break;
+      }
     }
   }
 
