@@ -2,6 +2,38 @@
 
 A modular, production-ready Node.js backend framework built with TypeScript, Fastify, and Prisma.
 
+[![npm version](https://badge.fury.io/js/servcraft.svg)](https://www.npmjs.com/package/servcraft)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Installation
+
+```bash
+# Install globally (recommended for CLI)
+npm install -g servcraft
+
+# Or use with npx
+npx servcraft init my-project
+```
+
+## Quick Start
+
+```bash
+# Create a new project
+servcraft init my-app
+
+# Navigate to project
+cd my-app
+
+# Install dependencies
+npm install
+
+# Setup database
+npm run db:push
+
+# Start development server
+npm run dev
+```
+
 ## Features
 
 - **Core Server**: Fastify with graceful shutdown, health checks
