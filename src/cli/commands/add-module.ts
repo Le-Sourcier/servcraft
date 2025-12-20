@@ -621,19 +621,63 @@ export interface ${name.charAt(0).toUpperCase() + name.slice(1)}Data {
 }
 
 /**
- * Helper: Generate module files - copies from existing src/modules if available
+ * Helper: Find servcraft modules source directory
+ */
+async function findServercraftModules(): Promise<string | null> {
+  // Get the directory where the CLI script is located
+  const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+
+  const possiblePaths = [
+    // Local node_modules (when servcraft is a dependency)
+    path.join(process.cwd(), 'node_modules', 'servcraft', 'src', 'modules'),
+    // From dist/cli/index.js -> src/modules (npx or global install)
+    path.resolve(scriptDir, '..', '..', 'src', 'modules'),
+    // From src/cli/commands/add-module.ts -> src/modules (development)
+    path.resolve(scriptDir, '..', '..', 'modules'),
+  ];
+
+  for (const p of possiblePaths) {
+    try {
+      const stats = await fs.stat(p);
+      if (stats.isDirectory()) {
+        return p;
+      }
+    } catch {
+      // Path doesn't exist, try next
+    }
+  }
+  return null;
+}
+
+/**
+ * Helper: Generate module files - copies from servcraft package modules
  */
 async function generateModuleFiles(moduleName: string, moduleDir: string): Promise<void> {
-  // Check if module exists in src/modules (our new modules)
-  const sourceModuleDir = path.join(process.cwd(), 'src', 'modules', moduleName);
+  // Map module names to their directory names in servcraft
+  const moduleNameMap: Record<string, string> = {
+    users: 'user',
+    'rate-limit': 'rate-limit',
+    'feature-flag': 'feature-flag',
+    'api-versioning': 'api-versioning',
+    'media-processing': 'media-processing',
+  };
 
-  if (await fileExists(sourceModuleDir)) {
-    // Copy from existing module
-    await copyModuleFromSource(sourceModuleDir, moduleDir);
-    return;
+  const sourceDirName = moduleNameMap[moduleName] || moduleName;
+
+  // Find servcraft modules directory
+  const servercraftModulesDir = await findServercraftModules();
+
+  if (servercraftModulesDir) {
+    const sourceModuleDir = path.join(servercraftModulesDir, sourceDirName);
+
+    if (await fileExists(sourceModuleDir)) {
+      // Copy from servcraft package
+      await copyModuleFromSource(sourceModuleDir, moduleDir);
+      return;
+    }
   }
 
-  // Fallback to old generation methods for basic modules
+  // Fallback to inline templates for basic modules
   switch (moduleName) {
     case 'auth':
       await generateAuthModule(moduleDir);

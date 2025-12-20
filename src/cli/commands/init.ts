@@ -620,7 +620,7 @@ model User {
 function generateEntryFile(options: InitOptions): string {
   const isTS = options.language === 'typescript';
 
-  return `${isTS ? "import { createServer } from './core/server.js';\nimport { logger } from './core/logger.js';" : "const { createServer } = require('./core/server.js');\nconst { logger } = require('./core/logger.js');"}
+  return `${isTS ? "import 'dotenv/config';\nimport { createServer } from './core/server.js';\nimport { logger } from './core/logger.js';" : "require('dotenv').config();\nconst { createServer } = require('./core/server.js');\nconst { logger } = require('./core/logger.js');"}
 
 async function main()${isTS ? ': Promise<void>' : ''} {
   const server = createServer();
