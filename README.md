@@ -293,6 +293,19 @@ servcraft g r item              # repository
 servcraft g v post              # schema/validator
 ```
 
+### List available modules
+
+```bash
+servcraft list                      # Show all available modules
+servcraft list --installed          # Show only installed modules
+servcraft list --available          # Show only available modules
+servcraft list --category Security  # Filter by category
+servcraft list --json               # Output as JSON
+
+# Aliases
+servcraft ls                        # Same as list
+```
+
 ### Add pre-built modules
 
 ```bash
@@ -312,7 +325,6 @@ servcraft add feature-flag      # Feature flags & A/B testing
 servcraft add analytics         # Prometheus metrics & tracking
 servcraft add media-processing  # Image/video processing
 servcraft add api-versioning    # API version management
-servcraft add --list            # Show all modules
 ```
 
 **Automatic Environment Configuration:**

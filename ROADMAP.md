@@ -4,7 +4,8 @@ This document outlines the planned features and improvements for Servcraft.
 
 ## Version History
 
-- **v0.1.7** (Current) - ESM/CommonJS module system choice
+- **v0.1.8** (Current) - Added `servcraft list` command
+- **v0.1.7** - ESM/CommonJS module system choice
 - **v0.1.6.3** - JavaScript/TypeScript support, docs command, bug fixes
 - **v0.1.6.2** - Fixed empty modules, added config/middleware/utils generators
 - **v0.1.6.1** - Added @fastify/jwt compatibility fix
@@ -16,11 +17,13 @@ This document outlines the planned features and improvements for Servcraft.
 
 ### v0.2.0 - CLI Enhancements
 
-#### `servcraft list`
+#### `servcraft list` ✅ Completed in v0.1.8
 List available and installed modules.
 ```bash
-servcraft list              # List all available modules
-servcraft list --installed  # List installed modules only
+servcraft list                      # List all available modules
+servcraft list --installed          # List installed modules only
+servcraft list --category Security  # Filter by category
+servcraft list --json               # Output as JSON
 ```
 
 #### `--dry-run` Option

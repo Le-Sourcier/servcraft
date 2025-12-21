@@ -6,6 +6,7 @@ import { generateCommand } from './commands/generate.js';
 import { addModuleCommand } from './commands/add-module.js';
 import { dbCommand } from './commands/db.js';
 import { docsCommand } from './commands/docs.js';
+import { listCommand } from './commands/list.js';
 
 const program = new Command();
 
@@ -28,5 +29,8 @@ program.addCommand(dbCommand);
 
 // Documentation commands
 program.addCommand(docsCommand);
+
+// List modules
+program.addCommand(listCommand);
 
 program.parse();
