@@ -32,7 +32,9 @@ Preview changes without writing files.
 ```bash
 servcraft init my-app --dry-run       # ✅ Implemented
 servcraft add auth --dry-run           # ✅ Implemented
-servcraft generate module users --dry-run  # ⏳ Pending
+servcraft generate module users --dry-run  # ✅ Implemented
+servcraft generate controller users --dry-run  # ✅ Implemented
+servcraft generate service users --dry-run     # ✅ Implemented
 ```
 
 #### Better Error Messages

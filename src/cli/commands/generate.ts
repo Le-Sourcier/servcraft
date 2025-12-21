@@ -14,7 +14,25 @@ import {
   info,
   getModulesDir,
 } from '../utils/helpers.js';
+import { DryRunManager } from '../utils/dry-run.js';
+import chalk from 'chalk';
 import { parseFields, type FieldDefinition } from '../utils/field-parser.js';
+
+// Helper to enable dry-run mode
+function enableDryRunIfNeeded(options: { dryRun?: boolean }): void {
+  const dryRun = DryRunManager.getInstance();
+  if (options.dryRun) {
+    dryRun.enable();
+    console.log(chalk.yellow('\n⚠ DRY RUN MODE - No files will be written\n'));
+  }
+}
+
+// Helper to show dry-run summary
+function showDryRunSummary(options: { dryRun?: boolean }): void {
+  if (options.dryRun) {
+    DryRunManager.getInstance().printSummary();
+  }
+}
 import { controllerTemplate } from '../templates/controller.js';
 import { serviceTemplate } from '../templates/service.js';
 import { repositoryTemplate } from '../templates/repository.js';
@@ -43,7 +61,9 @@ generateCommand
   .option('--prisma', 'Generate Prisma model suggestion')
   .option('--validator <type>', 'Validator type: zod, joi, yup', 'zod')
   .option('-i, --interactive', 'Interactive mode to define fields')
+  .option('--dry-run', 'Preview changes without writing files')
   .action(async (name: string, fieldsArgs: string[], options) => {
+    enableDryRunIfNeeded(options);
     let fields: FieldDefinition[] = [];
 
     // Parse fields from command line or interactive mode
@@ -161,6 +181,9 @@ generateCommand
         info(`  ${hasFields ? '3' : '4'}. Add the Prisma model to schema.prisma`);
         info(`  ${hasFields ? '4' : '5'}. Run: npm run db:migrate`);
       }
+
+      // Show dry-run summary if enabled
+      showDryRunSummary(options);
     } catch (err) {
       spinner.fail('Failed to generate module');
       error(err instanceof Error ? err.message : String(err));
@@ -173,7 +196,9 @@ generateCommand
   .alias('c')
   .description('Generate a controller')
   .option('-m, --module <module>', 'Target module name')
+  .option('--dry-run', 'Preview changes without writing files')
   .action(async (name: string, options) => {
+    enableDryRunIfNeeded(options);
     const spinner = ora('Generating controller...').start();
 
     try {
@@ -195,6 +220,7 @@ generateCommand
 
       spinner.succeed(`Controller "${pascalName}Controller" generated!`);
       success(`  src/modules/${moduleName}/${kebabName}.controller.ts`);
+      showDryRunSummary(options);
     } catch (err) {
       spinner.fail('Failed to generate controller');
       error(err instanceof Error ? err.message : String(err));
@@ -207,7 +233,9 @@ generateCommand
   .alias('s')
   .description('Generate a service')
   .option('-m, --module <module>', 'Target module name')
+  .option('--dry-run', 'Preview changes without writing files')
   .action(async (name: string, options) => {
+    enableDryRunIfNeeded(options);
     const spinner = ora('Generating service...').start();
 
     try {
@@ -229,6 +257,7 @@ generateCommand
 
       spinner.succeed(`Service "${pascalName}Service" generated!`);
       success(`  src/modules/${moduleName}/${kebabName}.service.ts`);
+      showDryRunSummary(options);
     } catch (err) {
       spinner.fail('Failed to generate service');
       error(err instanceof Error ? err.message : String(err));
@@ -241,7 +270,9 @@ generateCommand
   .alias('r')
   .description('Generate a repository')
   .option('-m, --module <module>', 'Target module name')
+  .option('--dry-run', 'Preview changes without writing files')
   .action(async (name: string, options) => {
+    enableDryRunIfNeeded(options);
     const spinner = ora('Generating repository...').start();
 
     try {
@@ -264,6 +295,7 @@ generateCommand
 
       spinner.succeed(`Repository "${pascalName}Repository" generated!`);
       success(`  src/modules/${moduleName}/${kebabName}.repository.ts`);
+      showDryRunSummary(options);
     } catch (err) {
       spinner.fail('Failed to generate repository');
       error(err instanceof Error ? err.message : String(err));
@@ -276,7 +308,9 @@ generateCommand
   .alias('t')
   .description('Generate types/interfaces')
   .option('-m, --module <module>', 'Target module name')
+  .option('--dry-run', 'Preview changes without writing files')
   .action(async (name: string, options) => {
+    enableDryRunIfNeeded(options);
     const spinner = ora('Generating types...').start();
 
     try {
@@ -297,6 +331,7 @@ generateCommand
 
       spinner.succeed(`Types for "${pascalName}" generated!`);
       success(`  src/modules/${moduleName}/${kebabName}.types.ts`);
+      showDryRunSummary(options);
     } catch (err) {
       spinner.fail('Failed to generate types');
       error(err instanceof Error ? err.message : String(err));
@@ -309,7 +344,9 @@ generateCommand
   .alias('v')
   .description('Generate validation schemas')
   .option('-m, --module <module>', 'Target module name')
+  .option('--dry-run', 'Preview changes without writing files')
   .action(async (name: string, options) => {
+    enableDryRunIfNeeded(options);
     const spinner = ora('Generating schemas...').start();
 
     try {
@@ -331,6 +368,7 @@ generateCommand
 
       spinner.succeed(`Schemas for "${pascalName}" generated!`);
       success(`  src/modules/${moduleName}/${kebabName}.schemas.ts`);
+      showDryRunSummary(options);
     } catch (err) {
       spinner.fail('Failed to generate schemas');
       error(err instanceof Error ? err.message : String(err));
@@ -342,7 +380,9 @@ generateCommand
   .command('routes <name>')
   .description('Generate routes')
   .option('-m, --module <module>', 'Target module name')
+  .option('--dry-run', 'Preview changes without writing files')
   .action(async (name: string, options) => {
+    enableDryRunIfNeeded(options);
     const spinner = ora('Generating routes...').start();
 
     try {
@@ -365,6 +405,7 @@ generateCommand
 
       spinner.succeed(`Routes for "${pascalName}" generated!`);
       success(`  src/modules/${moduleName}/${kebabName}.routes.ts`);
+      showDryRunSummary(options);
     } catch (err) {
       spinner.fail('Failed to generate routes');
       error(err instanceof Error ? err.message : String(err));

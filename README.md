@@ -280,6 +280,7 @@ servcraft init my-app --dry-run -y                    # Preview without creating
 # Generate complete module
 servcraft generate module product
 servcraft g m product --prisma   # Include Prisma model
+servcraft g m product --dry-run  # Preview files
 
 # Generate individual files
 servcraft generate controller user
@@ -293,6 +294,9 @@ servcraft g c user              # controller
 servcraft g s order             # service
 servcraft g r item              # repository
 servcraft g v post              # schema/validator
+
+# Preview before generating
+servcraft g m product name:string price:number --dry-run
 ```
 
 ### List available modules
