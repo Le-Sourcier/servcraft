@@ -193,7 +193,7 @@ export const listCommand = new Command('list')
           byCategory[mod.category] = [];
         }
 
-        byCategory[mod.category].push({
+        byCategory[mod.category]?.push({
           id: key,
           name: mod.name,
           description: mod.description,

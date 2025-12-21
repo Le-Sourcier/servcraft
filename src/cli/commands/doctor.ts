@@ -12,7 +12,7 @@ interface Check {
 
 async function checkNodeVersion(): Promise<Check> {
   const version = process.version;
-  const major = parseInt(version.slice(1).split('.')[0]);
+  const major = parseInt(version.slice(1).split('.')[0] || '0', 10);
 
   if (major >= 18) {
     return { name: 'Node.js', status: 'pass', message: `${version} ✓` };
