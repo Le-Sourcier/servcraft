@@ -4,7 +4,8 @@ This document outlines the planned features and improvements for Servcraft.
 
 ## Version History
 
-- **v0.2.0** (Current) - Better errors, remove, doctor, update (stub) - Phase 1 complete ✅
+- **v0.3.0** (Current) - CLI tests added - Phase 2 started
+- **v0.2.0** - Better errors, remove, doctor, update (stub) - Phase 1 complete ✅
 - **v0.1.9** - Added `--dry-run` option for all commands (init, add, generate)
 - **v0.1.8** - Added `servcraft list` command
 - **v0.1.7** - ESM/CommonJS module system choice
@@ -112,26 +113,25 @@ servcraft completion zsh >> ~/.zshrc
 
 ---
 
-## Phase 2: Testing & Quality (v0.3.x)
+## Phase 2: Testing & Quality (v0.3.x) 🚧 In Progress
 
 ### v0.3.0 - CLI Tests
 
 #### Unit Tests for CLI Commands
-- Test `init` command with various options
-- Test `add` command for all 20 modules
-- Test `generate` command (module, controller, service, etc.)
-- Test `db` commands
-- Test `docs` commands
-
-#### Integration Tests
-- Full project generation and startup
-- Module installation and removal
-- Database operations
+- ✅ Test `list` command (3 tests passing)
+- ✅ Test `doctor` command (3 tests passing)
+- ✅ Test `--dry-run` option (2 tests passing)
+- ⏳ Test `init` command with various options
+- ⏳ Test `add` command for modules
+- ⏳ Test `generate` command variants
 
 #### CI/CD Pipeline
-- GitHub Actions for automated testing
-- Test on Node.js 18, 20, 22
-- Code coverage reporting
+- ✅ GitHub Actions already configured
+- ✅ Tests run on Node.js 20
+- ✅ Coverage reporting configured
+- ⏳ Extend to Node.js 18, 22
+
+**Status:** 8 CLI tests added and passing ✅
 
 **Estimated complexity:** High
 
