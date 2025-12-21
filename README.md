@@ -229,19 +229,47 @@ npx servcraft init
 You'll be prompted to choose:
 - Project name
 - Language (TypeScript/JavaScript)
+- Module system (ESM/CommonJS)
 - Database (PostgreSQL, MySQL, SQLite, MongoDB)
 - Validation library (Zod, Joi, Yup)
 - Features (Auth, Users, Email, etc.)
+
+### Module System Options
+
+ServCraft supports both **ES Modules** and **CommonJS**:
+
+| Module System | Import Style | File Extension | package.json |
+|--------------|--------------|----------------|--------------|
+| **ESM** (default) | `import x from 'y'` | `.js` | `"type": "module"` |
+| **CommonJS** | `require('y')` | `.cjs` | (none) |
+
+```bash
+# ESM project (recommended)
+npx servcraft init my-app --esm
+
+# CommonJS project (legacy compatibility)
+npx servcraft init my-app --cjs
+```
+
+**Note:** TypeScript projects always use ESM syntax in source files. The output format (ESM/CJS) is controlled by the `tsup` build configuration.
 
 ## CLI Commands
 
 ### Initialize project
 
 ```bash
-servcraft init [name]           # Create new project
-servcraft init --yes            # Use defaults
-servcraft init --js             # Use JavaScript
+servcraft init [name]           # Create new project (interactive)
+servcraft init --yes            # Use defaults (TypeScript + ESM)
+servcraft init --js             # Use JavaScript instead of TypeScript
+servcraft init --ts             # Use TypeScript (default)
+servcraft init --esm            # Use ES Modules (default)
+servcraft init --cjs            # Use CommonJS
 servcraft init --db postgresql  # Specify database
+
+# Combined examples
+servcraft init my-app --js --esm --db postgresql -y   # JS + ESM + PostgreSQL
+servcraft init my-app --js --cjs --db mongodb -y      # JS + CommonJS + MongoDB
+servcraft init my-app --ts --db mysql -y              # TypeScript + MySQL
 ```
 
 ### Generate resources
