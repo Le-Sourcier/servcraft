@@ -4,9 +4,10 @@ This document outlines the planned features and improvements for Servcraft.
 
 ## Version History
 
-- **v0.1.9** (Current) - ESM/CommonJS module system choice
-- **v0.1.8** - JavaScript/TypeScript support, docs command, bug fixes
-- **v0.1.7** - Fixed empty modules, added config/middleware/utils generators
+- **v0.1.7** (Current) - ESM/CommonJS module system choice
+- **v0.1.6.3** - JavaScript/TypeScript support, docs command, bug fixes
+- **v0.1.6.2** - Fixed empty modules, added config/middleware/utils generators
+- **v0.1.6.1** - Added @fastify/jwt compatibility fix
 - **v0.1.6** - Fixed module copying from package
 
 ---
