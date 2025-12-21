@@ -49,18 +49,19 @@ servcraft generate service users --dry-run     # ✅ Implemented
 
 ### v0.2.1 - Module Management
 
-#### `servcraft remove <module>`
+#### `servcraft remove <module>` ✅ Completed in v0.2.0
 Remove an installed module.
 ```bash
 servcraft remove auth
-servcraft remove auth --keep-migrations  # Keep database migrations
+servcraft remove auth --yes          # Skip confirmation
+servcraft remove auth --keep-env     # Keep environment variables
 ```
 
 Features:
-- Remove module files from `src/modules/`
-- Clean up related environment variables
-- Optionally remove database migrations
-- Update imports in main files
+- ✅ Remove module files from `src/modules/`
+- ✅ Interactive confirmation
+- ✅ Show cleanup instructions
+- ✅ Alias: rm
 
 #### `servcraft update [module]`
 Update modules to latest version.
@@ -76,19 +77,18 @@ servcraft update --check   # Check for updates without applying
 
 ### v0.2.2 - Developer Experience
 
-#### `servcraft doctor`
+#### `servcraft doctor` ✅ Completed in v0.2.0
 Diagnose project configuration issues.
 ```bash
 servcraft doctor
 ```
 
 Checks:
-- Node.js version compatibility
-- Missing dependencies
-- Environment variables validation
-- Database connection
-- TypeScript configuration
-- Prisma schema sync status
+- ✅ Node.js version compatibility
+- ✅ package.json and Fastify
+- ✅ Project directories (src, node_modules)
+- ✅ Git repository
+- ✅ .env file
 
 #### Shell Auto-completion
 ```bash

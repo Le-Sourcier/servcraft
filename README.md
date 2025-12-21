@@ -312,6 +312,18 @@ servcraft list --json               # Output as JSON
 servcraft ls                        # Same as list
 ```
 
+### Module Management
+
+```bash
+# Remove a module
+servcraft remove auth               # Interactive confirmation
+servcraft rm auth --yes             # Skip confirmation
+servcraft remove auth --keep-env    # Keep environment variables
+
+# Diagnose project
+servcraft doctor                    # Check configuration and dependencies
+```
+
 ### Add pre-built modules
 
 ```bash
