@@ -103,11 +103,17 @@ Checks:
 - ✅ Git repository
 - ✅ .env file
 
-#### Shell Auto-completion
+#### Shell Auto-completion ✅ Completed in v0.3.0
 ```bash
 servcraft completion bash >> ~/.bashrc
 servcraft completion zsh >> ~/.zshrc
 ```
+
+Features:
+- ✅ Bash completion script with command and module suggestions
+- ✅ Zsh completion script with descriptions
+- ✅ Autocomplete for all commands, subcommands, and modules
+- ✅ Support for aliases (g, m, c, s, etc.)
 
 **Estimated complexity:** Medium
 
@@ -121,9 +127,11 @@ servcraft completion zsh >> ~/.zshrc
 - ✅ Test `list` command (3 tests passing)
 - ✅ Test `doctor` command (3 tests passing)
 - ✅ Test `--dry-run` option (2 tests passing)
-- ⏳ Test `init` command with various options
+- ✅ Test `init` command with various options (4 tests: --js, --cjs, --esm, --dry-run)
+- ✅ Test `generate` command variants (3 tests: controller, service, module)
+- ✅ Test error handling (2 tests: invalid module, documentation links)
 - ⏳ Test `add` command for modules
-- ⏳ Test `generate` command variants
+- ⏳ Test `remove` command
 
 #### CI/CD Pipeline
 - ✅ GitHub Actions already configured
@@ -131,7 +139,7 @@ servcraft completion zsh >> ~/.zshrc
 - ✅ Coverage reporting configured
 - ⏳ Extend to Node.js 18, 22
 
-**Status:** 8 CLI tests added and passing ✅
+**Status:** 17 CLI tests added and passing ✅ (98 total tests)
 
 **Estimated complexity:** High
 

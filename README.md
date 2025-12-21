@@ -324,6 +324,29 @@ servcraft remove auth --keep-env    # Keep environment variables
 servcraft doctor                    # Check configuration and dependencies
 ```
 
+### Shell Auto-completion
+
+Enable tab completion for servcraft commands in your shell:
+
+```bash
+# Bash - Add to ~/.bashrc or ~/.bash_profile
+servcraft completion bash >> ~/.bashrc
+source ~/.bashrc
+
+# Zsh - Add to ~/.zshrc
+servcraft completion zsh >> ~/.zshrc
+source ~/.zshrc
+
+# Or save to completion directory (Zsh)
+servcraft completion zsh > ~/.zsh/completion/_servcraft
+```
+
+After enabling, you can use tab to autocomplete:
+- Commands: `servcraft <TAB>`
+- Subcommands: `servcraft generate <TAB>`
+- Module names: `servcraft add <TAB>`
+- Options and flags
+
 ### Add pre-built modules
 
 ```bash

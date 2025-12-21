@@ -10,6 +10,7 @@ import { listCommand } from './commands/list.js';
 import { removeCommand } from './commands/remove.js';
 import { doctorCommand } from './commands/doctor.js';
 import { updateCommand } from './commands/update.js';
+import { completionCommand } from './commands/completion.js';
 
 const program = new Command();
 
@@ -44,5 +45,8 @@ program.addCommand(doctorCommand);
 
 // Update modules
 program.addCommand(updateCommand);
+
+// Shell completion
+program.addCommand(completionCommand);
 
 program.parse();
