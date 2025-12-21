@@ -74,15 +74,23 @@ Features:
 - ✅ Show cleanup instructions
 - ✅ Alias: rm
 
-#### `servcraft update [module]` ⏳ Stub in v0.2.0
+#### `servcraft update [module]` ✅ Completed in v0.3.0
 Update modules to latest version.
 ```bash
 servcraft update           # Update all modules
 servcraft update auth      # Update specific module
 servcraft update --check   # Check for updates without applying
+servcraft update --yes     # Skip confirmation
 ```
 
-Status: Command registered, full implementation planned for v0.2.1
+Features:
+- ✅ Update specific module or all installed modules
+- ✅ Interactive confirmation before updating
+- ✅ Check mode to see what would be updated
+- ✅ Overwrites existing files with latest version
+- ✅ Error handling and validation
+
+Note: Version tracking will be added in a future release. Currently always installs latest version.
 
 **Estimated complexity:** Medium
 

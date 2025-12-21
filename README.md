@@ -315,6 +315,12 @@ servcraft ls                        # Same as list
 ### Module Management
 
 ```bash
+# Update modules
+servcraft update                    # Update all installed modules
+servcraft update auth               # Update specific module
+servcraft update --check            # Check for updates without applying
+servcraft update auth --yes         # Skip confirmation
+
 # Remove a module
 servcraft remove auth               # Interactive confirmation
 servcraft rm auth --yes             # Skip confirmation
