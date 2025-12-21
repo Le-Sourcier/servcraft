@@ -10,6 +10,7 @@ import { ensureDir, writeFile, error, warn } from '../utils/helpers.js';
 interface InitOptions {
   name: string;
   language: 'typescript' | 'javascript';
+  moduleSystem: 'esm' | 'commonjs';
   database: 'postgresql' | 'mysql' | 'sqlite' | 'mongodb' | 'none';
   orm: 'prisma' | 'mongoose' | 'none';
   validator: 'zod' | 'joi' | 'yup';
@@ -23,11 +24,20 @@ export const initCommand = new Command('init')
   .option('-y, --yes', 'Skip prompts and use defaults')
   .option('--ts, --typescript', 'Use TypeScript (default)')
   .option('--js, --javascript', 'Use JavaScript')
+  .option('--esm', 'Use ES Modules (import/export) - default')
+  .option('--cjs, --commonjs', 'Use CommonJS (require/module.exports)')
   .option('--db <database>', 'Database type (postgresql, mysql, sqlite, mongodb, none)')
   .action(
     async (
       name?: string,
-      cmdOptions?: { yes?: boolean; typescript?: boolean; javascript?: boolean; db?: string }
+      cmdOptions?: {
+        yes?: boolean;
+        typescript?: boolean;
+        javascript?: boolean;
+        esm?: boolean;
+        commonjs?: boolean;
+        db?: string;
+      }
     ) => {
       console.log(
         chalk.blue(`
@@ -46,6 +56,7 @@ export const initCommand = new Command('init')
         options = {
           name: name || 'my-servcraft-app',
           language: cmdOptions.javascript ? 'javascript' : 'typescript',
+          moduleSystem: cmdOptions.commonjs ? 'commonjs' : 'esm',
           database: db,
           orm: db === 'mongodb' ? 'mongoose' : db === 'none' ? 'none' : 'prisma',
           validator: 'zod',
@@ -74,6 +85,16 @@ export const initCommand = new Command('init')
               { name: 'JavaScript', value: 'javascript' },
             ],
             default: 'typescript',
+          },
+          {
+            type: 'list',
+            name: 'moduleSystem',
+            message: 'Select module system:',
+            choices: [
+              { name: 'ESM (import/export) - Recommended', value: 'esm' },
+              { name: 'CommonJS (require/module.exports)', value: 'commonjs' },
+            ],
+            default: 'esm',
           },
           {
             type: 'list',
@@ -150,10 +171,10 @@ export const initCommand = new Command('init')
 
         // Generate tsconfig or jsconfig
         if (options.language === 'typescript') {
-          await writeFile(path.join(projectDir, 'tsconfig.json'), generateTsConfig());
-          await writeFile(path.join(projectDir, 'tsup.config.ts'), generateTsupConfig());
+          await writeFile(path.join(projectDir, 'tsconfig.json'), generateTsConfig(options));
+          await writeFile(path.join(projectDir, 'tsup.config.ts'), generateTsupConfig(options));
         } else {
-          await writeFile(path.join(projectDir, 'jsconfig.json'), generateJsConfig());
+          await writeFile(path.join(projectDir, 'jsconfig.json'), generateJsConfig(options));
         }
 
         // Generate .env files
@@ -171,7 +192,10 @@ export const initCommand = new Command('init')
         );
 
         // Create directory structure
-        const ext = options.language === 'typescript' ? 'ts' : 'js';
+        // For JS: .js for ESM, .cjs for CommonJS
+        // For TS: always .ts (output format handled by tsup)
+        const ext =
+          options.language === 'typescript' ? 'ts' : options.moduleSystem === 'esm' ? 'js' : 'cjs';
         const dirs = [
           'src/core',
           'src/config',
@@ -302,19 +326,46 @@ export const initCommand = new Command('init')
 
 function generatePackageJson(options: InitOptions): Record<string, unknown> {
   const isTS = options.language === 'typescript';
+  const isESM = options.moduleSystem === 'esm';
+
+  // Determine dev command based on language and module system
+  let devCommand: string;
+  if (isTS) {
+    devCommand = 'tsx watch src/index.ts';
+  } else if (isESM) {
+    devCommand = 'node --watch src/index.js';
+  } else {
+    devCommand = 'node --watch src/index.cjs';
+  }
+
+  // Determine start command
+  let startCommand: string;
+  if (isTS) {
+    startCommand = isESM ? 'node dist/index.js' : 'node dist/index.cjs';
+  } else if (isESM) {
+    startCommand = 'node src/index.js';
+  } else {
+    startCommand = 'node src/index.cjs';
+  }
 
   const pkg: Record<string, unknown> = {
     name: options.name,
     version: '0.1.0',
     description: 'A Servcraft application',
-    main: isTS ? 'dist/index.js' : 'src/index.js',
-    type: 'module',
+    main: isTS
+      ? isESM
+        ? 'dist/index.js'
+        : 'dist/index.cjs'
+      : isESM
+        ? 'src/index.js'
+        : 'src/index.cjs',
+    ...(isESM && { type: 'module' }),
     scripts: {
-      dev: isTS ? 'tsx watch src/index.ts' : 'node --watch src/index.js',
+      dev: devCommand,
       build: isTS ? 'tsup' : 'echo "No build needed for JS"',
-      start: isTS ? 'node dist/index.js' : 'node src/index.js',
+      start: startCommand,
       test: 'vitest',
-      lint: isTS ? 'eslint src --ext .ts' : 'eslint src --ext .js',
+      lint: isTS ? 'eslint src --ext .ts' : 'eslint src --ext .js,.cjs',
     },
     dependencies: {
       fastify: '^4.28.1',
@@ -385,13 +436,15 @@ function generatePackageJson(options: InitOptions): Record<string, unknown> {
   return pkg;
 }
 
-function generateTsConfig(): string {
+function generateTsConfig(options: InitOptions): string {
+  const isESM = options.moduleSystem === 'esm';
+
   return JSON.stringify(
     {
       compilerOptions: {
         target: 'ES2022',
-        module: 'NodeNext',
-        moduleResolution: 'NodeNext',
+        module: isESM ? 'NodeNext' : 'CommonJS',
+        moduleResolution: isESM ? 'NodeNext' : 'Node',
         lib: ['ES2022'],
         outDir: './dist',
         rootDir: './src',
@@ -411,12 +464,14 @@ function generateTsConfig(): string {
   );
 }
 
-function generateJsConfig(): string {
+function generateJsConfig(options: InitOptions): string {
+  const isESM = options.moduleSystem === 'esm';
+
   return JSON.stringify(
     {
       compilerOptions: {
-        module: 'NodeNext',
-        moduleResolution: 'NodeNext',
+        module: isESM ? 'NodeNext' : 'CommonJS',
+        moduleResolution: isESM ? 'NodeNext' : 'Node',
         target: 'ES2022',
         checkJs: true,
       },
@@ -428,12 +483,14 @@ function generateJsConfig(): string {
   );
 }
 
-function generateTsupConfig(): string {
+function generateTsupConfig(options: InitOptions): string {
+  const isESM = options.moduleSystem === 'esm';
+
   return `import { defineConfig } from 'tsup';
 
 export default defineConfig({
   entry: ['src/index.ts'],
-  format: ['esm'],
+  format: ['${isESM ? 'esm' : 'cjs'}'],
   dts: true,
   clean: true,
   sourcemap: true,
@@ -643,10 +700,13 @@ model User {
 
 function generateEntryFile(options: InitOptions): string {
   const isTS = options.language === 'typescript';
+  const isESM = options.moduleSystem === 'esm';
+  const fileExt = isTS ? 'js' : isESM ? 'js' : 'cjs';
 
-  return `import 'dotenv/config';
-import { createServer } from './core/server.js';
-import { logger } from './core/logger.js';
+  if (isESM || isTS) {
+    return `import 'dotenv/config';
+import { createServer } from './core/server.${fileExt}';
+import { logger } from './core/logger.${fileExt}';
 
 async function main()${isTS ? ': Promise<void>' : ''} {
   const server = createServer();
@@ -661,17 +721,34 @@ async function main()${isTS ? ': Promise<void>' : ''} {
 
 main();
 `;
+  } else {
+    // CommonJS
+    return `require('dotenv').config();
+const { createServer } = require('./core/server.cjs');
+const { logger } = require('./core/logger.cjs');
+
+async function main() {
+  const server = createServer();
+
+  try {
+    await server.start();
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to start server');
+    process.exit(1);
+  }
+}
+
+main();
+`;
+  }
 }
 
 function generateServerFile(options: InitOptions): string {
   const isTS = options.language === 'typescript';
+  const isESM = options.moduleSystem === 'esm';
+  const fileExt = isTS ? 'js' : isESM ? 'js' : 'cjs';
 
-  return `import Fastify from 'fastify';
-${isTS ? "import type { FastifyInstance } from 'fastify';" : ''}
-import { logger } from './logger.js';
-
-${isTS ? 'export function createServer(): { instance: FastifyInstance; start: () => Promise<void> }' : 'export function createServer()'} {
-  const app = Fastify({ logger });
+  const serverBody = `  const app = Fastify({ logger });
 
   // Health check
   app.get('/health', async () => ({
@@ -698,35 +775,66 @@ ${isTS ? 'export function createServer(): { instance: FastifyInstance; start: ()
       logger.info(\`Server listening on \${host}:\${port}\`);
     },
   };
-}
+}`;
+
+  if (isESM || isTS) {
+    return `import Fastify from 'fastify';
+${isTS ? "import type { FastifyInstance } from 'fastify';" : ''}
+import { logger } from './logger.${fileExt}';
+
+${isTS ? 'export function createServer(): { instance: FastifyInstance; start: () => Promise<void> }' : 'export function createServer()'} {
+${serverBody}
 `;
+  } else {
+    // CommonJS
+    return `const Fastify = require('fastify');
+const { logger } = require('./logger.cjs');
+
+function createServer() {
+${serverBody}
+
+module.exports = { createServer };
+`;
+  }
 }
 
 function generateLoggerFile(options: InitOptions): string {
   const isTS = options.language === 'typescript';
+  const isESM = options.moduleSystem === 'esm';
 
-  return `import pino from 'pino';
-${isTS ? "import type { Logger } from 'pino';" : ''}
-
-export const logger${isTS ? ': Logger' : ''} = pino({
+  const loggerBody = `pino({
   level: process.env.LOG_LEVEL || 'info',
   transport: process.env.NODE_ENV !== 'production' ? {
     target: 'pino-pretty',
     options: { colorize: true },
   } : undefined,
-});
+})`;
+
+  if (isESM || isTS) {
+    return `import pino from 'pino';
+${isTS ? "import type { Logger } from 'pino';" : ''}
+
+export const logger${isTS ? ': Logger' : ''} = ${loggerBody};
 `;
+  } else {
+    // CommonJS
+    return `const pino = require('pino');
+
+const logger = ${loggerBody};
+
+module.exports = { logger };
+`;
+  }
 }
 
 function generateMongooseConnection(options: InitOptions): string {
   const isTS = options.language === 'typescript';
+  const isESM = options.moduleSystem === 'esm';
+  const fileExt = isTS ? 'js' : isESM ? 'js' : 'cjs';
 
-  return `import mongoose from 'mongoose';
-import { logger } from '../core/logger.js';
+  const connectionBody = `const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mydb';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mydb';
-
-export async function connectDatabase()${isTS ? ': Promise<typeof mongoose>' : ''} {
+async function connectDatabase()${isTS ? ': Promise<typeof mongoose>' : ''} {
   try {
     const conn = await mongoose.connect(MONGODB_URI);
     logger.info(\`MongoDB connected: \${conn.connection.host}\`);
@@ -737,43 +845,40 @@ export async function connectDatabase()${isTS ? ': Promise<typeof mongoose>' : '
   }
 }
 
-export async function disconnectDatabase()${isTS ? ': Promise<void>' : ''} {
+async function disconnectDatabase()${isTS ? ': Promise<void>' : ''} {
   try {
     await mongoose.disconnect();
     logger.info('MongoDB disconnected');
   } catch (error) {
     logger.error({ err: error }, 'MongoDB disconnect failed');
   }
-}
+}`;
 
-export { mongoose };
+  if (isESM || isTS) {
+    return `import mongoose from 'mongoose';
+import { logger } from '../core/logger.${fileExt}';
+
+${connectionBody}
+
+export { connectDatabase, disconnectDatabase, mongoose };
 `;
+  } else {
+    // CommonJS
+    return `const mongoose = require('mongoose');
+const { logger } = require('../core/logger.cjs');
+
+${connectionBody}
+
+module.exports = { connectDatabase, disconnectDatabase, mongoose };
+`;
+  }
 }
 
 function generateMongooseUserModel(options: InitOptions): string {
   const isTS = options.language === 'typescript';
+  const isESM = options.moduleSystem === 'esm';
 
-  return `import mongoose${isTS ? ', { Schema, Document }' : ''} from 'mongoose';
-import bcrypt from 'bcryptjs';
-${!isTS ? 'const { Schema } = mongoose;' : ''}
-
-${
-  isTS
-    ? `export interface IUser extends Document {
-  email: string;
-  password: string;
-  name?: string;
-  role: 'user' | 'admin';
-  status: 'active' | 'inactive' | 'suspended';
-  emailVerified: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-  comparePassword(candidatePassword: string): Promise<boolean>;
-}
-`
-    : ''
-}
-const userSchema = new Schema${isTS ? '<IUser>' : ''}({
+  const schemaBody = `const userSchema = new Schema${isTS ? '<IUser>' : ''}({
   email: {
     type: String,
     required: true,
@@ -824,18 +929,53 @@ userSchema.pre('save', async function(next) {
 // Compare password method
 userSchema.methods.comparePassword = async function(candidatePassword${isTS ? ': string' : ''})${isTS ? ': Promise<boolean>' : ''} {
   return bcrypt.compare(candidatePassword, this.password);
-};
+};`;
+
+  const tsInterface = isTS
+    ? `
+export interface IUser extends Document {
+  email: string;
+  password: string;
+  name?: string;
+  role: 'user' | 'admin';
+  status: 'active' | 'inactive' | 'suspended';
+  emailVerified: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  comparePassword(candidatePassword: string): Promise<boolean>;
+}
+`
+    : '';
+
+  if (isESM || isTS) {
+    return `import mongoose${isTS ? ', { Schema, Document }' : ''} from 'mongoose';
+import bcrypt from 'bcryptjs';
+${!isTS ? 'const { Schema } = mongoose;' : ''}
+${tsInterface}
+${schemaBody}
 
 export const User = mongoose.model${isTS ? '<IUser>' : ''}('User', userSchema);
 `;
+  } else {
+    // CommonJS
+    return `const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const { Schema } = mongoose;
+
+${schemaBody}
+
+const User = mongoose.model('User', userSchema);
+
+module.exports = { User };
+`;
+  }
 }
 
 function generateConfigFile(options: InitOptions): string {
   const isTS = options.language === 'typescript';
+  const isESM = options.moduleSystem === 'esm';
 
-  return `import 'dotenv/config';
-
-export const config = {
+  const configBody = `{
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '3000', 10),
   host: process.env.HOST || '0.0.0.0',
@@ -857,20 +997,33 @@ export const config = {
   log: {
     level: process.env.LOG_LEVEL || 'info',
   },
-}${isTS ? ' as const' : ''};
+}${isTS ? ' as const' : ''}`;
+
+  if (isESM || isTS) {
+    return `import 'dotenv/config';
+
+export const config = ${configBody};
 `;
+  } else {
+    // CommonJS
+    return `require('dotenv').config();
+
+const config = ${configBody};
+
+module.exports = { config };
+`;
+  }
 }
 
 function generateMiddlewareFile(options: InitOptions): string {
   const isTS = options.language === 'typescript';
+  const isESM = options.moduleSystem === 'esm';
+  const fileExt = isTS ? 'js' : isESM ? 'js' : 'cjs';
 
-  return `${isTS ? "import type { FastifyRequest, FastifyReply } from 'fastify';" : ''}
-import { logger } from '../core/logger.js';
-
-/**
+  const middlewareBody = `/**
  * Error handler middleware
  */
-export function errorHandler(error${isTS ? ': Error' : ''}, request${isTS ? ': FastifyRequest' : ''}, reply${isTS ? ': FastifyReply' : ''})${isTS ? ': void' : ''} {
+function errorHandler(error${isTS ? ': Error' : ''}, request${isTS ? ': FastifyRequest' : ''}, reply${isTS ? ': FastifyReply' : ''})${isTS ? ': void' : ''} {
   logger.error({ err: error, url: request.url, method: request.method }, 'Request error');
 
   const statusCode = (error${isTS ? ' as any' : ''}).statusCode || 500;
@@ -886,20 +1039,38 @@ export function errorHandler(error${isTS ? ': Error' : ''}, request${isTS ? ': F
 /**
  * Request logging middleware
  */
-export function requestLogger(request${isTS ? ': FastifyRequest' : ''}, reply${isTS ? ': FastifyReply' : ''}, done${isTS ? ': () => void' : ''})${isTS ? ': void' : ''} {
+function requestLogger(request${isTS ? ': FastifyRequest' : ''}, reply${isTS ? ': FastifyReply' : ''}, done${isTS ? ': () => void' : ''})${isTS ? ': void' : ''} {
   logger.info({ url: request.url, method: request.method, ip: request.ip }, 'Incoming request');
   done();
-}
+}`;
+
+  if (isESM || isTS) {
+    return `${isTS ? "import type { FastifyRequest, FastifyReply } from 'fastify';" : ''}
+import { logger } from '../core/logger.${fileExt}';
+
+${middlewareBody}
+
+export { errorHandler, requestLogger };
 `;
+  } else {
+    // CommonJS
+    return `const { logger } = require('../core/logger.cjs');
+
+${middlewareBody}
+
+module.exports = { errorHandler, requestLogger };
+`;
+  }
 }
 
 function generateUtilsFile(options: InitOptions): string {
   const isTS = options.language === 'typescript';
+  const isESM = options.moduleSystem === 'esm';
 
-  return `/**
+  const utilsBody = `/**
  * Standard API response helper
  */
-export function apiResponse${isTS ? '<T>' : ''}(data${isTS ? ': T' : ''}, message = "Success")${isTS ? ': { success: boolean; message: string; data: T }' : ''} {
+function apiResponse${isTS ? '<T>' : ''}(data${isTS ? ': T' : ''}, message = "Success")${isTS ? ': { success: boolean; message: string; data: T }' : ''} {
   return {
     success: true,
     message,
@@ -910,7 +1081,7 @@ export function apiResponse${isTS ? '<T>' : ''}(data${isTS ? ': T' : ''}, messag
 /**
  * Error response helper
  */
-export function errorResponse(message${isTS ? ': string' : ''}, code${isTS ? '?: string' : ''})${isTS ? ': { success: boolean; error: string; code?: string }' : ''} {
+function errorResponse(message${isTS ? ': string' : ''}, code${isTS ? '?: string' : ''})${isTS ? ': { success: boolean; error: string; code?: string }' : ''} {
   return {
     success: false,
     error: message,
@@ -918,9 +1089,28 @@ export function errorResponse(message${isTS ? ': string' : ''}, code${isTS ? '?:
   };
 }
 
-${
-  isTS
-    ? `/**
+/**
+ * Pagination helper
+ */
+function paginate${isTS ? '<T>' : ''}(data${isTS ? ': T[]' : ''}, page${isTS ? ': number' : ''}, limit${isTS ? ': number' : ''}, total${isTS ? ': number' : ''})${isTS ? ': PaginationResult<T>' : ''} {
+  const totalPages = Math.ceil(total / limit);
+
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
+    },
+  };
+}`;
+
+  const tsInterface = isTS
+    ? `
+/**
  * Pagination result type
  */
 export interface PaginationResult<T> {
@@ -935,27 +1125,21 @@ export interface PaginationResult<T> {
   };
 }
 `
-    : ''
-}
-/**
- * Pagination helper
- */
-export function paginate${isTS ? '<T>' : ''}(data${isTS ? ': T[]' : ''}, page${isTS ? ': number' : ''}, limit${isTS ? ': number' : ''}, total${isTS ? ': number' : ''})${isTS ? ': PaginationResult<T>' : ''} {
-  const totalPages = Math.ceil(total / limit);
+    : '';
 
-  return {
-    data,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages,
-      hasNextPage: page < totalPages,
-      hasPrevPage: page > 1,
-    },
-  };
-}
+  if (isESM || isTS) {
+    return `${tsInterface}
+${utilsBody}
+
+export { apiResponse, errorResponse, paginate };
 `;
+  } else {
+    // CommonJS
+    return `${utilsBody}
+
+module.exports = { apiResponse, errorResponse, paginate };
+`;
+  }
 }
 
 function generateTypesFile(options: InitOptions): string {
