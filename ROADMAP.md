@@ -4,7 +4,7 @@ This document outlines the planned features and improvements for Servcraft.
 
 ## Version History
 
-- **v0.2.0** (Current) - Better error messages, servcraft remove, servcraft doctor (stub)
+- **v0.2.0** (Current) - Better errors, remove, doctor, update (stub) - Phase 1 complete ✅
 - **v0.1.9** - Added `--dry-run` option for all commands (init, add, generate)
 - **v0.1.8** - Added `servcraft list` command
 - **v0.1.7** - ESM/CommonJS module system choice
@@ -15,7 +15,17 @@ This document outlines the planned features and improvements for Servcraft.
 
 ---
 
-## Phase 1: Core CLI Improvements (v0.2.x)
+## Phase 1: Core CLI Improvements (v0.2.x) ✅ COMPLETE
+
+**Achievements:**
+- ✅ `servcraft list` - List available and installed modules
+- ✅ `--dry-run` - Preview changes for init, add, generate commands
+- ✅ Better error messages - Suggestions, colored output, docs links
+- ✅ `servcraft remove` - Remove modules with confirmation
+- ✅ `servcraft doctor` - Diagnose project configuration
+- ⏳ `servcraft update` - Stub created for v0.2.1
+
+---
 
 ### v0.2.0 - CLI Enhancements
 
@@ -63,13 +73,15 @@ Features:
 - ✅ Show cleanup instructions
 - ✅ Alias: rm
 
-#### `servcraft update [module]`
+#### `servcraft update [module]` ⏳ Stub in v0.2.0
 Update modules to latest version.
 ```bash
 servcraft update           # Update all modules
 servcraft update auth      # Update specific module
 servcraft update --check   # Check for updates without applying
 ```
+
+Status: Command registered, full implementation planned for v0.2.1
 
 **Estimated complexity:** Medium
 

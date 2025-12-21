@@ -9,6 +9,7 @@ import { docsCommand } from './commands/docs.js';
 import { listCommand } from './commands/list.js';
 import { removeCommand } from './commands/remove.js';
 import { doctorCommand } from './commands/doctor.js';
+import { updateCommand } from './commands/update.js';
 
 const program = new Command();
 
@@ -40,5 +41,8 @@ program.addCommand(removeCommand);
 
 // Diagnose project
 program.addCommand(doctorCommand);
+
+// Update modules
+program.addCommand(updateCommand);
 
 program.parse();
