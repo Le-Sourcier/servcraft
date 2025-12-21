@@ -16,6 +16,7 @@ import {
 import { EnvManager } from '../utils/env-manager.js';
 import { TemplateManager } from '../utils/template-manager.js';
 import { InteractivePrompt } from '../utils/interactive-prompt.js';
+import { DryRunManager } from '../utils/dry-run.js';
 
 // Pre-built modules that can be added
 const AVAILABLE_MODULES = {
@@ -160,10 +161,17 @@ export const addModuleCommand = new Command('add')
   .option('-f, --force', 'Force overwrite existing module')
   .option('-u, --update', 'Update existing module (smart merge)')
   .option('--skip-existing', 'Skip if module already exists')
+  .option('--dry-run', 'Preview changes without writing files')
   .action(
     async (
       moduleName?: string,
-      options?: { list?: boolean; force?: boolean; update?: boolean; skipExisting?: boolean }
+      options?: {
+        list?: boolean;
+        force?: boolean;
+        update?: boolean;
+        skipExisting?: boolean;
+        dryRun?: boolean;
+      }
     ) => {
       if (options?.list || !moduleName) {
         console.log(chalk.bold('\n📦 Available Modules:\n'));
@@ -178,6 +186,13 @@ export const addModuleCommand = new Command('add')
         console.log(`  ${chalk.yellow('servcraft add users')}     Add user management module`);
         console.log(`  ${chalk.yellow('servcraft add email')}     Add email service module\n`);
         return;
+      }
+
+      // Enable dry-run mode if specified
+      const dryRun = DryRunManager.getInstance();
+      if (options?.dryRun) {
+        dryRun.enable();
+        console.log(chalk.yellow('\n⚠ DRY RUN MODE - No files will be written\n'));
       }
 
       const module = AVAILABLE_MODULES[moduleName as keyof typeof AVAILABLE_MODULES];
@@ -319,10 +334,17 @@ export const addModuleCommand = new Command('add')
           }
         }
 
-        console.log('\n📌 Next steps:');
-        info('  1. Configure environment variables in .env (if needed)');
-        info('  2. Register the module in your main app file');
-        info('  3. Run database migrations if needed');
+        if (!options?.dryRun) {
+          console.log('\n📌 Next steps:');
+          info('  1. Configure environment variables in .env (if needed)');
+          info('  2. Register the module in your main app file');
+          info('  3. Run database migrations if needed');
+        }
+
+        // Show dry-run summary if enabled
+        if (options?.dryRun) {
+          dryRun.printSummary();
+        }
       } catch (err) {
         spinner.fail('Failed to add module');
         error(err instanceof Error ? err.message : String(err));

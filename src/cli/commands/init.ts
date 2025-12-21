@@ -6,6 +6,7 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { execSync } from 'child_process';
 import { ensureDir, writeFile, error, warn } from '../utils/helpers.js';
+import { DryRunManager } from '../utils/dry-run.js';
 
 interface InitOptions {
   name: string;
@@ -27,6 +28,7 @@ export const initCommand = new Command('init')
   .option('--esm', 'Use ES Modules (import/export) - default')
   .option('--cjs, --commonjs', 'Use CommonJS (require/module.exports)')
   .option('--db <database>', 'Database type (postgresql, mysql, sqlite, mongodb, none)')
+  .option('--dry-run', 'Preview changes without writing files')
   .action(
     async (
       name?: string,
@@ -37,8 +39,16 @@ export const initCommand = new Command('init')
         esm?: boolean;
         commonjs?: boolean;
         db?: string;
+        dryRun?: boolean;
       }
     ) => {
+      // Enable dry-run mode if specified
+      const dryRun = DryRunManager.getInstance();
+      if (cmdOptions?.dryRun) {
+        dryRun.enable();
+        console.log(chalk.yellow('\n⚠ DRY RUN MODE - No files will be written\n'));
+      }
+
       console.log(
         chalk.blue(`
 ╔═══════════════════════════════════════════╗
@@ -274,19 +284,23 @@ export const initCommand = new Command('init')
 
         spinner.succeed('Project files generated!');
 
-        // Install dependencies
-        const installSpinner = ora('Installing dependencies...').start();
+        // Install dependencies (skip in dry-run mode)
+        if (!cmdOptions?.dryRun) {
+          const installSpinner = ora('Installing dependencies...').start();
 
-        try {
-          execSync('npm install', { cwd: projectDir, stdio: 'pipe' });
-          installSpinner.succeed('Dependencies installed!');
-        } catch {
-          installSpinner.warn('Failed to install dependencies automatically');
-          warn('  Run "npm install" manually in the project directory');
+          try {
+            execSync('npm install', { cwd: projectDir, stdio: 'pipe' });
+            installSpinner.succeed('Dependencies installed!');
+          } catch {
+            installSpinner.warn('Failed to install dependencies automatically');
+            warn('  Run "npm install" manually in the project directory');
+          }
         }
 
         // Print success message
-        console.log('\n' + chalk.green('✨ Project created successfully!'));
+        if (!cmdOptions?.dryRun) {
+          console.log('\n' + chalk.green('✨ Project created successfully!'));
+        }
         console.log('\n' + chalk.bold('📁 Project structure:'));
         console.log(`
   ${options.name}/
@@ -317,6 +331,11 @@ export const initCommand = new Command('init')
   ${chalk.yellow('servcraft generate service <name>')}    Generate a service
   ${chalk.yellow('servcraft add auth')}                   Add authentication module
 `);
+
+        // Show dry-run summary if enabled
+        if (cmdOptions?.dryRun) {
+          dryRun.printSummary();
+        }
       } catch (err) {
         spinner.fail('Failed to create project');
         error(err instanceof Error ? err.message : String(err));

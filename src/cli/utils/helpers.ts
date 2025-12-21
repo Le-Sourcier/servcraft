@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import chalk from 'chalk';
+import { DryRunManager } from './dry-run.js';
 
 export function toPascalCase(str: string): string {
   return str
@@ -52,6 +53,18 @@ export async function ensureDir(dirPath: string): Promise<void> {
 }
 
 export async function writeFile(filePath: string, content: string): Promise<void> {
+  const dryRun = DryRunManager.getInstance();
+
+  if (dryRun.isEnabled()) {
+    dryRun.addOperation({
+      type: 'create',
+      path: dryRun.relativePath(filePath),
+      content,
+      size: content.length,
+    });
+    return;
+  }
+
   await ensureDir(path.dirname(filePath));
   await fs.writeFile(filePath, content, 'utf-8');
 }

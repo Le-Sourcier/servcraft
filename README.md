@@ -265,11 +265,13 @@ servcraft init --ts             # Use TypeScript (default)
 servcraft init --esm            # Use ES Modules (default)
 servcraft init --cjs            # Use CommonJS
 servcraft init --db postgresql  # Specify database
+servcraft init --dry-run        # Preview files without writing
 
 # Combined examples
 servcraft init my-app --js --esm --db postgresql -y   # JS + ESM + PostgreSQL
 servcraft init my-app --js --cjs --db mongodb -y      # JS + CommonJS + MongoDB
 servcraft init my-app --ts --db mysql -y              # TypeScript + MySQL
+servcraft init my-app --dry-run -y                    # Preview without creating
 ```
 
 ### Generate resources
@@ -325,6 +327,7 @@ servcraft add feature-flag      # Feature flags & A/B testing
 servcraft add analytics         # Prometheus metrics & tracking
 servcraft add media-processing  # Image/video processing
 servcraft add api-versioning    # API version management
+servcraft add auth --dry-run    # Preview module files
 ```
 
 **Automatic Environment Configuration:**

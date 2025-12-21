@@ -4,7 +4,8 @@ This document outlines the planned features and improvements for Servcraft.
 
 ## Version History
 
-- **v0.1.8** (Current) - Added `servcraft list` command
+- **v0.1.9** (Current) - Added `--dry-run` option for init and add commands
+- **v0.1.8** - Added `servcraft list` command
 - **v0.1.7** - ESM/CommonJS module system choice
 - **v0.1.6.3** - JavaScript/TypeScript support, docs command, bug fixes
 - **v0.1.6.2** - Fixed empty modules, added config/middleware/utils generators
@@ -26,12 +27,12 @@ servcraft list --category Security  # Filter by category
 servcraft list --json               # Output as JSON
 ```
 
-#### `--dry-run` Option
+#### `--dry-run` Option ✅ Completed in v0.1.9
 Preview changes without writing files.
 ```bash
-servcraft init my-app --dry-run
-servcraft add auth --dry-run
-servcraft generate module users --dry-run
+servcraft init my-app --dry-run       # ✅ Implemented
+servcraft add auth --dry-run           # ✅ Implemented
+servcraft generate module users --dry-run  # ⏳ Pending
 ```
 
 #### Better Error Messages
