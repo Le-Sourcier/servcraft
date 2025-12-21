@@ -644,7 +644,9 @@ model User {
 function generateEntryFile(options: InitOptions): string {
   const isTS = options.language === 'typescript';
 
-  return `${isTS ? "import 'dotenv/config';\nimport { createServer } from './core/server.js';\nimport { logger } from './core/logger.js';" : "require('dotenv').config();\nconst { createServer } = require('./core/server.js');\nconst { logger } = require('./core/logger.js');"}
+  return `import 'dotenv/config';
+import { createServer } from './core/server.js';
+import { logger } from './core/logger.js';
 
 async function main()${isTS ? ': Promise<void>' : ''} {
   const server = createServer();
@@ -664,16 +666,11 @@ main();
 function generateServerFile(options: InitOptions): string {
   const isTS = options.language === 'typescript';
 
-  return `${
-    isTS
-      ? `import Fastify from 'fastify';
-import type { FastifyInstance } from 'fastify';
-import { logger } from './logger.js';`
-      : `const Fastify = require('fastify');
-const { logger } = require('./logger.js');`
-  }
+  return `import Fastify from 'fastify';
+${isTS ? "import type { FastifyInstance } from 'fastify';" : ''}
+import { logger } from './logger.js';
 
-${isTS ? 'export function createServer(): { instance: FastifyInstance; start: () => Promise<void> }' : 'function createServer()'} {
+${isTS ? 'export function createServer(): { instance: FastifyInstance; start: () => Promise<void> }' : 'export function createServer()'} {
   const app = Fastify({ logger });
 
   // Health check
@@ -702,36 +699,34 @@ ${isTS ? 'export function createServer(): { instance: FastifyInstance; start: ()
     },
   };
 }
-
-${isTS ? '' : 'module.exports = { createServer };'}
 `;
 }
 
 function generateLoggerFile(options: InitOptions): string {
   const isTS = options.language === 'typescript';
 
-  return `${isTS ? "import pino from 'pino';\nimport type { Logger } from 'pino';" : "const pino = require('pino');"}
+  return `import pino from 'pino';
+${isTS ? "import type { Logger } from 'pino';" : ''}
 
-${isTS ? 'export const logger: Logger' : 'const logger'} = pino({
+export const logger${isTS ? ': Logger' : ''} = pino({
   level: process.env.LOG_LEVEL || 'info',
   transport: process.env.NODE_ENV !== 'production' ? {
     target: 'pino-pretty',
     options: { colorize: true },
   } : undefined,
 });
-
-${isTS ? '' : 'module.exports = { logger };'}
 `;
 }
 
 function generateMongooseConnection(options: InitOptions): string {
   const isTS = options.language === 'typescript';
 
-  return `${isTS ? "import mongoose from 'mongoose';\nimport { logger } from '../core/logger.js';" : "const mongoose = require('mongoose');\nconst { logger } = require('../core/logger.js');"}
+  return `import mongoose from 'mongoose';
+import { logger } from '../core/logger.js';
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mydb';
 
-${isTS ? 'export async function connectDatabase(): Promise<typeof mongoose>' : 'async function connectDatabase()'} {
+export async function connectDatabase()${isTS ? ': Promise<typeof mongoose>' : ''} {
   try {
     const conn = await mongoose.connect(MONGODB_URI);
     logger.info(\`MongoDB connected: \${conn.connection.host}\`);
@@ -742,7 +737,7 @@ ${isTS ? 'export async function connectDatabase(): Promise<typeof mongoose>' : '
   }
 }
 
-${isTS ? 'export async function disconnectDatabase(): Promise<void>' : 'async function disconnectDatabase()'} {
+export async function disconnectDatabase()${isTS ? ': Promise<void>' : ''} {
   try {
     await mongoose.disconnect();
     logger.info('MongoDB disconnected');
@@ -751,14 +746,16 @@ ${isTS ? 'export async function disconnectDatabase(): Promise<void>' : 'async fu
   }
 }
 
-${isTS ? 'export { mongoose };' : 'module.exports = { connectDatabase, disconnectDatabase, mongoose };'}
+export { mongoose };
 `;
 }
 
 function generateMongooseUserModel(options: InitOptions): string {
   const isTS = options.language === 'typescript';
 
-  return `${isTS ? "import mongoose, { Schema, Document } from 'mongoose';\nimport bcrypt from 'bcryptjs';" : "const mongoose = require('mongoose');\nconst bcrypt = require('bcryptjs');\nconst { Schema } = mongoose;"}
+  return `import mongoose${isTS ? ', { Schema, Document }' : ''} from 'mongoose';
+import bcrypt from 'bcryptjs';
+${!isTS ? 'const { Schema } = mongoose;' : ''}
 
 ${
   isTS
@@ -772,10 +769,10 @@ ${
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
-}`
+}
+`
     : ''
 }
-
 const userSchema = new Schema${isTS ? '<IUser>' : ''}({
   email: {
     type: String,
@@ -829,16 +826,16 @@ userSchema.methods.comparePassword = async function(candidatePassword${isTS ? ':
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-${isTS ? "export const User = mongoose.model<IUser>('User', userSchema);" : "const User = mongoose.model('User', userSchema);\nmodule.exports = { User };"}
+export const User = mongoose.model${isTS ? '<IUser>' : ''}('User', userSchema);
 `;
 }
 
 function generateConfigFile(options: InitOptions): string {
   const isTS = options.language === 'typescript';
 
-  return `${isTS ? "import 'dotenv/config';" : "require('dotenv').config();"}
+  return `import 'dotenv/config';
 
-${isTS ? 'export const config = {' : 'const config = {'}
+export const config = {
   env: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '3000', 10),
   host: process.env.HOST || '0.0.0.0',
@@ -861,25 +858,19 @@ ${isTS ? 'export const config = {' : 'const config = {'}
     level: process.env.LOG_LEVEL || 'info',
   },
 }${isTS ? ' as const' : ''};
-
-${isTS ? '' : 'module.exports = { config };'}
 `;
 }
 
 function generateMiddlewareFile(options: InitOptions): string {
   const isTS = options.language === 'typescript';
 
-  return `${
-    isTS
-      ? `import type { FastifyRequest, FastifyReply } from 'fastify';
-import { logger } from '../core/logger.js';`
-      : `const { logger } = require('../core/logger.js');`
-  }
+  return `${isTS ? "import type { FastifyRequest, FastifyReply } from 'fastify';" : ''}
+import { logger } from '../core/logger.js';
 
 /**
  * Error handler middleware
  */
-${isTS ? 'export function errorHandler(error: Error, request: FastifyRequest, reply: FastifyReply): void {' : 'function errorHandler(error, request, reply) {'}
+export function errorHandler(error${isTS ? ': Error' : ''}, request${isTS ? ': FastifyRequest' : ''}, reply${isTS ? ': FastifyReply' : ''})${isTS ? ': void' : ''} {
   logger.error({ err: error, url: request.url, method: request.method }, 'Request error');
 
   const statusCode = (error${isTS ? ' as any' : ''}).statusCode || 500;
@@ -895,12 +886,10 @@ ${isTS ? 'export function errorHandler(error: Error, request: FastifyRequest, re
 /**
  * Request logging middleware
  */
-${isTS ? 'export function requestLogger(request: FastifyRequest, reply: FastifyReply, done: () => void): void {' : 'function requestLogger(request, reply, done) {'}
+export function requestLogger(request${isTS ? ': FastifyRequest' : ''}, reply${isTS ? ': FastifyReply' : ''}, done${isTS ? ': () => void' : ''})${isTS ? ': void' : ''} {
   logger.info({ url: request.url, method: request.method, ip: request.ip }, 'Incoming request');
   done();
 }
-
-${isTS ? '' : 'module.exports = { errorHandler, requestLogger };'}
 `;
 }
 
@@ -910,7 +899,7 @@ function generateUtilsFile(options: InitOptions): string {
   return `/**
  * Standard API response helper
  */
-${isTS ? 'export function apiResponse<T>(data: T, message = "Success"): { success: boolean; message: string; data: T }' : 'function apiResponse(data, message = "Success")'} {
+export function apiResponse${isTS ? '<T>' : ''}(data${isTS ? ': T' : ''}, message = "Success")${isTS ? ': { success: boolean; message: string; data: T }' : ''} {
   return {
     success: true,
     message,
@@ -921,7 +910,7 @@ ${isTS ? 'export function apiResponse<T>(data: T, message = "Success"): { succes
 /**
  * Error response helper
  */
-${isTS ? 'export function errorResponse(message: string, code?: string): { success: boolean; error: string; code?: string }' : 'function errorResponse(message, code)'} {
+export function errorResponse(message${isTS ? ': string' : ''}, code${isTS ? '?: string' : ''})${isTS ? ': { success: boolean; error: string; code?: string }' : ''} {
   return {
     success: false,
     error: message,
@@ -929,12 +918,12 @@ ${isTS ? 'export function errorResponse(message: string, code?: string): { succe
   };
 }
 
-/**
- * Pagination helper
- */
 ${
   isTS
-    ? `export interface PaginationResult<T> {
+    ? `/**
+ * Pagination result type
+ */
+export interface PaginationResult<T> {
   data: T[];
   pagination: {
     page: number;
@@ -945,10 +934,13 @@ ${
     hasPrevPage: boolean;
   };
 }
-
-export function paginate<T>(data: T[], page: number, limit: number, total: number): PaginationResult<T>`
-    : 'function paginate(data, page, limit, total)'
-} {
+`
+    : ''
+}
+/**
+ * Pagination helper
+ */
+export function paginate${isTS ? '<T>' : ''}(data${isTS ? ': T[]' : ''}, page${isTS ? ': number' : ''}, limit${isTS ? ': number' : ''}, total${isTS ? ': number' : ''})${isTS ? ': PaginationResult<T>' : ''} {
   const totalPages = Math.ceil(total / limit);
 
   return {
@@ -963,8 +955,6 @@ export function paginate<T>(data: T[], page: number, limit: number, total: numbe
     },
   };
 }
-
-${isTS ? '' : 'module.exports = { apiResponse, errorResponse, paginate };'}
 `;
 }
 
