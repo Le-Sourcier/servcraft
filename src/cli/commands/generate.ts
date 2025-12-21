@@ -17,6 +17,7 @@ import {
 import { DryRunManager } from '../utils/dry-run.js';
 import chalk from 'chalk';
 import { parseFields, type FieldDefinition } from '../utils/field-parser.js';
+import { ErrorTypes, displayError } from '../utils/error-handler.js';
 
 // Helper to enable dry-run mode
 function enableDryRunIfNeeded(options: { dryRun?: boolean }): void {
@@ -212,7 +213,7 @@ generateCommand
 
       if (await fileExists(filePath)) {
         spinner.stop();
-        error(`Controller "${kebabName}" already exists`);
+        displayError(ErrorTypes.FILE_ALREADY_EXISTS(`${kebabName}.controller.ts`));
         return;
       }
 

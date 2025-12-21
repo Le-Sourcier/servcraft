@@ -4,7 +4,8 @@ This document outlines the planned features and improvements for Servcraft.
 
 ## Version History
 
-- **v0.1.9** (Current) - Added `--dry-run` option for init and add commands
+- **v0.2.0** (Current) - Better error messages, servcraft remove, servcraft doctor (stub)
+- **v0.1.9** - Added `--dry-run` option for all commands (init, add, generate)
 - **v0.1.8** - Added `servcraft list` command
 - **v0.1.7** - ESM/CommonJS module system choice
 - **v0.1.6.3** - JavaScript/TypeScript support, docs command, bug fixes

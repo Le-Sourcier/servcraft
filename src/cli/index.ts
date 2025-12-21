@@ -7,6 +7,8 @@ import { addModuleCommand } from './commands/add-module.js';
 import { dbCommand } from './commands/db.js';
 import { docsCommand } from './commands/docs.js';
 import { listCommand } from './commands/list.js';
+import { removeCommand } from './commands/remove.js';
+import { doctorCommand } from './commands/doctor.js';
 
 const program = new Command();
 
@@ -32,5 +34,11 @@ program.addCommand(docsCommand);
 
 // List modules
 program.addCommand(listCommand);
+
+// Remove module
+program.addCommand(removeCommand);
+
+// Diagnose project
+program.addCommand(doctorCommand);
 
 program.parse();

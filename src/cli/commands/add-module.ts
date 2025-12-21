@@ -17,6 +17,7 @@ import { EnvManager } from '../utils/env-manager.js';
 import { TemplateManager } from '../utils/template-manager.js';
 import { InteractivePrompt } from '../utils/interactive-prompt.js';
 import { DryRunManager } from '../utils/dry-run.js';
+import { ErrorTypes, displayError, validateProject } from '../utils/error-handler.js';
 
 // Pre-built modules that can be added
 const AVAILABLE_MODULES = {
@@ -198,8 +199,14 @@ export const addModuleCommand = new Command('add')
       const module = AVAILABLE_MODULES[moduleName as keyof typeof AVAILABLE_MODULES];
 
       if (!module) {
-        error(`Unknown module: ${moduleName}`);
-        info('Run "servcraft add --list" to see available modules');
+        displayError(ErrorTypes.MODULE_NOT_FOUND(moduleName));
+        return;
+      }
+
+      // Validate project structure
+      const projectError = validateProject();
+      if (projectError) {
+        displayError(projectError);
         return;
       }
 
