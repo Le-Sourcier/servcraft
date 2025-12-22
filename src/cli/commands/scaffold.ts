@@ -26,6 +26,7 @@ import { moduleIndexTemplate } from '../templates/module-index.js';
 import { controllerTestTemplate } from '../templates/controller-test.js';
 import { serviceTestTemplate } from '../templates/service-test.js';
 import { integrationTestTemplate } from '../templates/integration-test.js';
+import { getTemplate } from '../utils/template-loader.js';
 
 export const scaffoldCommand = new Command('scaffold')
   .description('Generate complete CRUD with Prisma model')
@@ -82,6 +83,13 @@ export const scaffoldCommand = new Command('scaffold')
         const modulesDir = getModulesDir();
         const moduleDir = path.join(modulesDir, kebabName);
 
+        // Load templates (custom or built-in)
+        const controllerTpl = await getTemplate('controller', controllerTemplate);
+        const serviceTpl = await getTemplate('service', serviceTemplate);
+        const repositoryTpl = await getTemplate('repository', repositoryTemplate);
+        const routesTpl = await getTemplate('routes', routesTemplate);
+        const moduleIndexTpl = await getTemplate('module-index', moduleIndexTemplate);
+
         // Generate all files
         const files = [
           {
@@ -100,23 +108,23 @@ export const scaffoldCommand = new Command('scaffold')
           },
           {
             name: `${kebabName}.service.ts`,
-            content: serviceTemplate(kebabName, pascalName, camelName),
+            content: serviceTpl(kebabName, pascalName, camelName),
           },
           {
             name: `${kebabName}.controller.ts`,
-            content: controllerTemplate(kebabName, pascalName, camelName),
+            content: controllerTpl(kebabName, pascalName, camelName),
           },
           {
             name: 'index.ts',
-            content: moduleIndexTemplate(kebabName, pascalName, camelName),
+            content: moduleIndexTpl(kebabName, pascalName, camelName),
           },
           {
             name: `${kebabName}.repository.ts`,
-            content: repositoryTemplate(kebabName, pascalName, camelName, pluralName),
+            content: repositoryTpl(kebabName, pascalName, camelName, pluralName),
           },
           {
             name: `${kebabName}.routes.ts`,
-            content: routesTemplate(kebabName, pascalName, camelName, pluralName),
+            content: routesTpl(kebabName, pascalName, camelName, pluralName),
           },
         ];
 
@@ -128,19 +136,24 @@ export const scaffoldCommand = new Command('scaffold')
         // Generate test files
         const testDir = path.join(moduleDir, '__tests__');
 
+        // Load test templates (custom or built-in)
+        const controllerTestTpl = await getTemplate('controller-test', controllerTestTemplate);
+        const serviceTestTpl = await getTemplate('service-test', serviceTestTemplate);
+        const integrationTestTpl = await getTemplate('integration-test', integrationTestTemplate);
+
         await writeFile(
           path.join(testDir, `${kebabName}.controller.test.ts`),
-          controllerTestTemplate(kebabName, pascalName, camelName)
+          controllerTestTpl(kebabName, pascalName, camelName)
         );
 
         await writeFile(
           path.join(testDir, `${kebabName}.service.test.ts`),
-          serviceTestTemplate(kebabName, pascalName, camelName)
+          serviceTestTpl(kebabName, pascalName, camelName)
         );
 
         await writeFile(
           path.join(testDir, `${kebabName}.integration.test.ts`),
-          integrationTestTemplate(kebabName, pascalName, camelName)
+          integrationTestTpl(kebabName, pascalName, camelName)
         );
 
         spinner.succeed(`Resource "${pascalName}" scaffolded successfully!`);

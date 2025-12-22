@@ -48,6 +48,7 @@ import { dynamicPrismaTemplate } from '../templates/dynamic-prisma.js';
 import { controllerTestTemplate } from '../templates/controller-test.js';
 import { serviceTestTemplate } from '../templates/service-test.js';
 import { integrationTestTemplate } from '../templates/integration-test.js';
+import { getTemplate } from '../utils/template-loader.js';
 
 export const generateCommand = new Command('generate')
   .alias('g')
@@ -100,41 +101,50 @@ generateCommand
       // Use dynamic templates if fields are provided
       const hasFields = fields.length > 0;
 
+      // Load templates (custom or built-in)
+      const controllerTpl = await getTemplate('controller', controllerTemplate);
+      const serviceTpl = await getTemplate('service', serviceTemplate);
+      const repositoryTpl = await getTemplate('repository', repositoryTemplate);
+      const typesTpl = await getTemplate('types', typesTemplate);
+      const schemasTpl = await getTemplate('schemas', schemasTemplate);
+      const routesTpl = await getTemplate('routes', routesTemplate);
+      const moduleIndexTpl = await getTemplate('module-index', moduleIndexTemplate);
+
       const files = [
         {
           name: `${kebabName}.types.ts`,
           content: hasFields
             ? dynamicTypesTemplate(kebabName, pascalName, fields)
-            : typesTemplate(kebabName, pascalName),
+            : typesTpl(kebabName, pascalName),
         },
         {
           name: `${kebabName}.schemas.ts`,
           content: hasFields
             ? dynamicSchemasTemplate(kebabName, pascalName, camelName, fields, validatorType)
-            : schemasTemplate(kebabName, pascalName, camelName),
+            : schemasTpl(kebabName, pascalName, camelName),
         },
         {
           name: `${kebabName}.service.ts`,
-          content: serviceTemplate(kebabName, pascalName, camelName),
+          content: serviceTpl(kebabName, pascalName, camelName),
         },
         {
           name: `${kebabName}.controller.ts`,
-          content: controllerTemplate(kebabName, pascalName, camelName),
+          content: controllerTpl(kebabName, pascalName, camelName),
         },
-        { name: 'index.ts', content: moduleIndexTemplate(kebabName, pascalName, camelName) },
+        { name: 'index.ts', content: moduleIndexTpl(kebabName, pascalName, camelName) },
       ];
 
       if (options.repository !== false) {
         files.push({
           name: `${kebabName}.repository.ts`,
-          content: repositoryTemplate(kebabName, pascalName, camelName, pluralName),
+          content: repositoryTpl(kebabName, pascalName, camelName, pluralName),
         });
       }
 
       if (options.routes !== false) {
         files.push({
           name: `${kebabName}.routes.ts`,
-          content: routesTemplate(kebabName, pascalName, camelName, pluralName),
+          content: routesTpl(kebabName, pascalName, camelName, pluralName),
         });
       }
 
@@ -147,19 +157,24 @@ generateCommand
       if (options.withTests) {
         const testDir = path.join(moduleDir, '__tests__');
 
+        // Load test templates (custom or built-in)
+        const controllerTestTpl = await getTemplate('controller-test', controllerTestTemplate);
+        const serviceTestTpl = await getTemplate('service-test', serviceTestTemplate);
+        const integrationTestTpl = await getTemplate('integration-test', integrationTestTemplate);
+
         await writeFile(
           path.join(testDir, `${kebabName}.controller.test.ts`),
-          controllerTestTemplate(kebabName, pascalName, camelName)
+          controllerTestTpl(kebabName, pascalName, camelName)
         );
 
         await writeFile(
           path.join(testDir, `${kebabName}.service.test.ts`),
-          serviceTestTemplate(kebabName, pascalName, camelName)
+          serviceTestTpl(kebabName, pascalName, camelName)
         );
 
         await writeFile(
           path.join(testDir, `${kebabName}.integration.test.ts`),
-          integrationTestTemplate(kebabName, pascalName, camelName)
+          integrationTestTpl(kebabName, pascalName, camelName)
         );
       }
 
