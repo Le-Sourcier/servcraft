@@ -4,7 +4,8 @@ This document outlines the planned features and improvements for Servcraft.
 
 ## Version History
 
-- **v0.4.1** (Current) - Custom templates system - Phase 3 in progress 🚧
+- **v0.4.2** (Current) - Custom template loading in generate/scaffold - Phase 3 in progress 🚧
+- **v0.4.1** - Custom templates management (init/list)
 - **v0.4.0** - Scaffold command for complete CRUD generation
 - **v0.3.1** - Test templates with --with-tests flag - Phase 2 complete ✅
 - **v0.3.0** - Shell auto-completion, update command, comprehensive CLI tests (30 tests), CI/CD on Node.js 18/20/22
@@ -248,13 +249,28 @@ Template locations (priority order):
 2. User `~/.servcraft/templates/`
 3. Built-in defaults
 
-Note: Custom template loading in generate/scaffold commands will be added in v0.4.2
-
 **Estimated complexity:** High
 
 ---
 
-### v0.4.2 - Plugin System
+### v0.4.2 - Template Loading ✅ Completed
+
+#### Custom Template Loading
+Automatically use custom templates in generate/scaffold commands.
+
+Features:
+- ✅ Template loader utility with priority-based loading
+- ✅ `generate` command uses custom templates automatically
+- ✅ `scaffold` command uses custom templates automatically
+- ✅ Falls back to built-in templates when custom not found
+- ✅ Supports all 10 template types seamlessly
+- ✅ No additional flags needed - works out of the box
+
+**Estimated complexity:** Medium
+
+---
+
+### v0.4.3 - Plugin System
 
 #### Third-party Plugins
 ```bash
