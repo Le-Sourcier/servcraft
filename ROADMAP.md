@@ -144,10 +144,11 @@ Features:
 - ✅ Test `completion` command (4 tests: bash, zsh, error, help)
 
 #### CI/CD Pipeline
-- ✅ GitHub Actions already configured
-- ✅ Tests run on Node.js 20
+- ✅ GitHub Actions configured
+- ✅ Tests run on Node.js 18, 20, 22 (matrix strategy)
 - ✅ Coverage reporting configured
-- ⏳ Extend to Node.js 18, 22
+- ✅ PostgreSQL and Redis services for integration tests
+- ✅ Lint, typecheck, build, test, security audit jobs
 
 **Status:** 30 CLI tests added and passing ✅ (111 total tests including integration tests)
 
