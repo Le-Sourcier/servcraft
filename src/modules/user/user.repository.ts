@@ -2,7 +2,24 @@ import { prisma } from '../../database/prisma.js';
 import type { PaginatedResult, PaginationParams } from '../../types/index.js';
 import { createPaginatedResult, getSkip } from '../../utils/pagination.js';
 import type { User, CreateUserData, UpdateUserData, UserFilters } from './types.js';
-import { UserRole, UserStatus } from '@prisma/client';
+
+// Use string literal enums for ESM/CommonJS compatibility
+const UserRole = {
+  USER: 'USER',
+  MODERATOR: 'MODERATOR',
+  ADMIN: 'ADMIN',
+  SUPER_ADMIN: 'SUPER_ADMIN',
+} as const;
+
+const UserStatus = {
+  ACTIVE: 'ACTIVE',
+  INACTIVE: 'INACTIVE',
+  SUSPENDED: 'SUSPENDED',
+  BANNED: 'BANNED',
+} as const;
+
+type UserRole = (typeof UserRole)[keyof typeof UserRole];
+type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
 
 /**
  * User Repository - Prisma Implementation
