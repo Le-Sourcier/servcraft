@@ -4,7 +4,7 @@ This document outlines the planned features and improvements for Servcraft.
 
 ## Version History
 
-- **v0.3.0** (Current) - CLI tests added - Phase 2 started
+- **v0.3.0** (Current) - Shell auto-completion, update command, comprehensive CLI tests (30 tests) - Phase 2 in progress 🚧
 - **v0.2.0** - Better errors, remove, doctor, update (stub) - Phase 1 complete ✅
 - **v0.1.9** - Added `--dry-run` option for all commands (init, add, generate)
 - **v0.1.8** - Added `servcraft list` command
