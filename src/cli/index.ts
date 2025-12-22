@@ -12,6 +12,7 @@ import { doctorCommand } from './commands/doctor.js';
 import { updateCommand } from './commands/update.js';
 import { completionCommand } from './commands/completion.js';
 import { scaffoldCommand } from './commands/scaffold.js';
+import { templatesCommand } from './commands/templates.js';
 
 const program = new Command();
 
@@ -52,5 +53,8 @@ program.addCommand(completionCommand);
 
 // Scaffold resource
 program.addCommand(scaffoldCommand);
+
+// Template management
+program.addCommand(templatesCommand);
 
 program.parse();

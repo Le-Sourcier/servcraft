@@ -335,6 +335,28 @@ servcraft remove auth --keep-env    # Keep environment variables
 servcraft doctor                    # Check configuration and dependencies
 ```
 
+### Custom Templates
+
+Customize code generation templates for your project:
+
+```bash
+# Initialize custom templates directory
+servcraft templates init        # Creates .servcraft/templates/
+
+# List available templates
+servcraft templates list         # Shows project, user, and built-in templates
+```
+
+**Template locations (priority order):**
+1. Project: `.servcraft/templates/` - Project-specific templates
+2. User: `~/.servcraft/templates/` - User-wide templates
+3. Built-in: Default ServCraft templates
+
+**Available template types:**
+- controller.ts, service.ts, repository.ts
+- types.ts, schemas.ts, routes.ts, module-index.ts
+- controller-test.ts, service-test.ts, integration-test.ts
+
 ### Shell Auto-completion
 
 Enable tab completion for servcraft commands in your shell:
