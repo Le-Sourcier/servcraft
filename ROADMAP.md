@@ -4,7 +4,8 @@ This document outlines the planned features and improvements for Servcraft.
 
 ## Version History
 
-- **v0.3.1** (Current) - Test templates with --with-tests flag - Phase 2 complete ✅
+- **v0.4.0** (Current) - Scaffold command for complete CRUD generation - Phase 3 started 🚧
+- **v0.3.1** - Test templates with --with-tests flag - Phase 2 complete ✅
 - **v0.3.0** - Shell auto-completion, update command, comprehensive CLI tests (30 tests), CI/CD on Node.js 18/20/22
 - **v0.2.0** - Better errors, remove, doctor, update (stub) - Phase 1 complete ✅
 - **v0.1.9** - Added `--dry-run` option for all commands (init, add, generate)
@@ -191,22 +192,32 @@ Features:
 
 ## Phase 3: Advanced Features (v0.4.x)
 
-### v0.4.0 - Scaffolding
+### v0.4.0 - Scaffolding ✅ Completed
 
 #### `servcraft scaffold <resource>`
 Generate complete CRUD with single command.
 ```bash
-servcraft scaffold product --fields "name:string price:number category:relation"
+servcraft scaffold product --fields "name:string price:number category:string?"
+servcraft scaffold user --fields "name:string email:email age:number?" --validator zod
 ```
 
 Generates:
-- Prisma model
-- Controller with CRUD endpoints
-- Service with business logic
-- Repository with data access
-- Routes with validation
-- Types/DTOs
-- Tests
+- ✅ Prisma model (with proper types and indexes)
+- ✅ Controller with CRUD endpoints
+- ✅ Service with business logic
+- ✅ Repository with data access
+- ✅ Routes with validation
+- ✅ Types/DTOs (interface, Create, Update, Filters)
+- ✅ Schemas (Zod/Joi/Yup validators)
+- ✅ Test files (controller, service, integration)
+
+Features:
+- Parses field definitions with types and modifiers
+- Supports optional fields (?)
+- Generates complete Prisma model ready to copy
+- Includes all CRUD operations
+- Automatically generates tests with --with-tests behavior
+- Supports all validators (zod, joi, yup)
 
 **Estimated complexity:** High
 

@@ -277,6 +277,10 @@ servcraft init my-app --dry-run -y                    # Preview without creating
 ### Generate resources
 
 ```bash
+# Scaffold complete CRUD resource (recommended)
+servcraft scaffold product --fields "name:string price:number category:string?"
+servcraft scaffold user --fields "name:string email:email age:number?" --validator zod
+
 # Generate complete module
 servcraft generate module product
 servcraft g m product --prisma      # Include Prisma model

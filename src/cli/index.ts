@@ -11,6 +11,7 @@ import { removeCommand } from './commands/remove.js';
 import { doctorCommand } from './commands/doctor.js';
 import { updateCommand } from './commands/update.js';
 import { completionCommand } from './commands/completion.js';
+import { scaffoldCommand } from './commands/scaffold.js';
 
 const program = new Command();
 
@@ -48,5 +49,8 @@ program.addCommand(updateCommand);
 
 // Shell completion
 program.addCommand(completionCommand);
+
+// Scaffold resource
+program.addCommand(scaffoldCommand);
 
 program.parse();
