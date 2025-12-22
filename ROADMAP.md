@@ -138,8 +138,10 @@ Features:
 - ✅ Test `init` command with various options (4 tests: --js, --cjs, --esm, --dry-run)
 - ✅ Test `generate` command variants (3 tests: controller, service, module)
 - ✅ Test error handling (2 tests: invalid module, documentation links)
-- ⏳ Test `add` command for modules
-- ⏳ Test `remove` command
+- ✅ Test `add` command for modules (3 tests: validation, error handling, help)
+- ✅ Test `remove` command (3 tests: validation, help, alias)
+- ✅ Test `update` command (3 tests: validation, check flag, help)
+- ✅ Test `completion` command (4 tests: bash, zsh, error, help)
 
 #### CI/CD Pipeline
 - ✅ GitHub Actions already configured
@@ -147,7 +149,7 @@ Features:
 - ✅ Coverage reporting configured
 - ⏳ Extend to Node.js 18, 22
 
-**Status:** 17 CLI tests added and passing ✅ (98 total tests)
+**Status:** 30 CLI tests added and passing ✅ (111 total tests including integration tests)
 
 **Estimated complexity:** High
 
