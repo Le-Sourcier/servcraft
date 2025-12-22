@@ -13,12 +13,21 @@ const prismaClientSingleton = (): PrismaClient => {
   });
 };
 
-// Use singleton pattern to prevent multiple instances in development
-export const prisma = globalThis.__prisma ?? prismaClientSingleton();
+// Lazy initialization - only create client when accessed
+let _prisma: PrismaClient | undefined;
 
-if (!isProduction()) {
-  globalThis.__prisma = prisma;
-}
+export const prisma = new Proxy({} as PrismaClient, {
+  get(target, prop) {
+    // Initialize on first access
+    if (!_prisma) {
+      _prisma = globalThis.__prisma ?? prismaClientSingleton();
+      if (!isProduction()) {
+        globalThis.__prisma = _prisma;
+      }
+    }
+    return (_prisma as any)[prop];
+  },
+});
 
 export async function connectDatabase(): Promise<void> {
   try {
