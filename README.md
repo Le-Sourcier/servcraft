@@ -279,8 +279,9 @@ servcraft init my-app --dry-run -y                    # Preview without creating
 ```bash
 # Generate complete module
 servcraft generate module product
-servcraft g m product --prisma   # Include Prisma model
-servcraft g m product --dry-run  # Preview files
+servcraft g m product --prisma      # Include Prisma model
+servcraft g m product --with-tests  # Include test files (__tests__ directory)
+servcraft g m product --dry-run     # Preview files
 
 # Generate individual files
 servcraft generate controller user

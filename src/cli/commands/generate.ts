@@ -45,6 +45,9 @@ import { prismaModelTemplate } from '../templates/prisma-model.js';
 import { dynamicTypesTemplate } from '../templates/dynamic-types.js';
 import { dynamicSchemasTemplate, type ValidatorType } from '../templates/dynamic-schemas.js';
 import { dynamicPrismaTemplate } from '../templates/dynamic-prisma.js';
+import { controllerTestTemplate } from '../templates/controller-test.js';
+import { serviceTestTemplate } from '../templates/service-test.js';
+import { integrationTestTemplate } from '../templates/integration-test.js';
 
 export const generateCommand = new Command('generate')
   .alias('g')
@@ -62,6 +65,7 @@ generateCommand
   .option('--prisma', 'Generate Prisma model suggestion')
   .option('--validator <type>', 'Validator type: zod, joi, yup', 'zod')
   .option('-i, --interactive', 'Interactive mode to define fields')
+  .option('--with-tests', 'Generate test files (__tests__ directory)')
   .option('--dry-run', 'Preview changes without writing files')
   .action(async (name: string, fieldsArgs: string[], options) => {
     enableDryRunIfNeeded(options);
@@ -139,6 +143,26 @@ generateCommand
         await writeFile(path.join(moduleDir, file.name), file.content);
       }
 
+      // Generate test files if --with-tests flag is provided
+      if (options.withTests) {
+        const testDir = path.join(moduleDir, '__tests__');
+
+        await writeFile(
+          path.join(testDir, `${kebabName}.controller.test.ts`),
+          controllerTestTemplate(kebabName, pascalName, camelName)
+        );
+
+        await writeFile(
+          path.join(testDir, `${kebabName}.service.test.ts`),
+          serviceTestTemplate(kebabName, pascalName, camelName)
+        );
+
+        await writeFile(
+          path.join(testDir, `${kebabName}.integration.test.ts`),
+          integrationTestTemplate(kebabName, pascalName, camelName)
+        );
+      }
+
       spinner.succeed(`Module "${pascalName}" generated successfully!`);
 
       // Show Prisma model if requested or fields provided
@@ -168,6 +192,12 @@ generateCommand
       // Show next steps
       console.log('\n📁 Files created:');
       files.forEach((f) => success(`  src/modules/${kebabName}/${f.name}`));
+
+      if (options.withTests) {
+        success(`  src/modules/${kebabName}/__tests__/${kebabName}.controller.test.ts`);
+        success(`  src/modules/${kebabName}/__tests__/${kebabName}.service.test.ts`);
+        success(`  src/modules/${kebabName}/__tests__/${kebabName}.integration.test.ts`);
+      }
 
       console.log('\n📌 Next steps:');
       if (!hasFields) {

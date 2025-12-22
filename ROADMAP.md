@@ -156,13 +156,12 @@ Features:
 
 ---
 
-### v0.3.1 - Generated Project Tests
+### v0.3.1 - Generated Project Tests ✅ Completed
 
 #### Test Templates
 Generate test files alongside modules:
 ```bash
 servcraft generate module users --with-tests
-servcraft add auth  # Includes test files
 ```
 
 Generated test structure:
@@ -176,6 +175,14 @@ src/modules/users/
 │   ├── users.service.test.ts
 │   └── users.integration.test.ts
 ```
+
+Features:
+- ✅ Controller test templates with Fastify injection
+- ✅ Service test templates with unit test structure
+- ✅ Integration test templates with full CRUD workflow
+- ✅ --with-tests flag for generate module command
+- ✅ Vitest test structure and assertions
+- ✅ TODO comments for customization
 
 **Estimated complexity:** Medium
 
