@@ -11,4 +11,5 @@ export default defineConfig({
   target: 'node18',
   outDir: 'dist',
   shims: true,
+  external: ['@prisma/client'],
 });
