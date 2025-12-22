@@ -4,7 +4,8 @@ This document outlines the planned features and improvements for Servcraft.
 
 ## Version History
 
-- **v0.4.2** (Current) - Custom template loading in generate/scaffold - Phase 3 in progress 🚧
+- **v0.4.3** (Current) - ESM/CommonJS compatibility fix - Phase 3 in progress 🚧
+- **v0.4.2** - Custom template loading in generate/scaffold
 - **v0.4.1** - Custom templates management (init/list)
 - **v0.4.0** - Scaffold command for complete CRUD generation
 - **v0.3.1** - Test templates with --with-tests flag - Phase 2 complete ✅
