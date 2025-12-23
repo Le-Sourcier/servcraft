@@ -926,3 +926,6 @@ async function performSmartMerge(
 
   InteractivePrompt.showMergeSummary(stats);
 }
+
+// Export helper functions for use in other commands
+export { generateModuleFiles, EnvManager, TemplateManager };

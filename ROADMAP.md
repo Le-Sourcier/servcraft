@@ -4,7 +4,8 @@ This document outlines the planned features and improvements for Servcraft.
 
 ## Version History
 
-- **v0.4.7** (Current) - CLI header alignment fix - Phase 3 in progress 🚧
+- **v0.4.8** (Current) - Automatic module installation during init - Phase 3 in progress 🚧
+- **v0.4.7** - CLI header alignment fix
 - **v0.4.6** - Improved CLI design
 - **v0.4.5** - Lazy Prisma client initialization
 - **v0.4.4** - Prisma client bundling fix

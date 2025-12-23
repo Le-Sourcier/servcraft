@@ -7,6 +7,7 @@ import chalk from 'chalk';
 import { execSync } from 'child_process';
 import { ensureDir, writeFile, error, warn } from '../utils/helpers.js';
 import { DryRunManager } from '../utils/dry-run.js';
+import { generateModuleFiles } from './add-module.js';
 
 interface InitOptions {
   name: string;
@@ -161,7 +162,7 @@ export const initCommand = new Command('init')
               { name: 'Email Service', value: 'email', checked: true },
               { name: 'Audit Logs', value: 'audit', checked: false },
               { name: 'File Upload', value: 'upload', checked: false },
-              { name: 'Redis Cache', value: 'redis', checked: false },
+              { name: 'Redis Cache', value: 'cache', checked: false },
             ],
           },
         ]);
@@ -304,6 +305,24 @@ export const initCommand = new Command('init')
         }
 
         spinner.succeed('Project files generated!');
+
+        // Install selected feature modules
+        if (options.features && options.features.length > 0 && !cmdOptions?.dryRun) {
+          const moduleSpinner = ora('Installing selected modules...').start();
+
+          try {
+            for (const feature of options.features) {
+              moduleSpinner.text = `Installing ${feature} module...`;
+              const moduleDir = path.join(projectDir, 'src/modules', feature);
+              await ensureDir(moduleDir);
+              await generateModuleFiles(feature, moduleDir);
+            }
+            moduleSpinner.succeed(`${options.features.length} module(s) installed!`);
+          } catch (err) {
+            moduleSpinner.fail('Failed to install some modules');
+            warn(`  Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+          }
+        }
 
         // Install dependencies (skip in dry-run mode)
         if (!cmdOptions?.dryRun) {
