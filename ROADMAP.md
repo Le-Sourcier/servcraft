@@ -4,7 +4,8 @@ This document outlines the planned features and improvements for Servcraft.
 
 ## Version History
 
-- **v0.4.6** (Current) - Improved CLI design - Phase 3 in progress 🚧
+- **v0.4.7** (Current) - CLI header alignment fix - Phase 3 in progress 🚧
+- **v0.4.6** - Improved CLI design
 - **v0.4.5** - Lazy Prisma client initialization
 - **v0.4.4** - Prisma client bundling fix
 - **v0.4.3** - ESM/CommonJS compatibility fix
