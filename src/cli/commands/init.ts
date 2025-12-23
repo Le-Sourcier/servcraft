@@ -50,8 +50,29 @@ export const initCommand = new Command('init')
       }
 
       console.log('');
-      console.log(chalk.cyan.bold('  🚀 Servcraft') + chalk.gray(' - Project Generator'));
-      console.log(chalk.gray('  ─'.repeat(25)));
+      console.log(chalk.cyan('╭─────────────────────────────────────────────────╮'));
+      console.log(
+        chalk.cyan('│') + '                                                 ' + chalk.cyan('│')
+      );
+      console.log(
+        chalk.cyan('│') +
+          '       ' +
+          chalk.bold.white('🚀 Servcraft') +
+          chalk.gray(' - Project Generator') +
+          '       ' +
+          chalk.cyan('│')
+      );
+      console.log(
+        chalk.cyan('│') +
+          '          ' +
+          chalk.gray('by @Le-Sourcier') +
+          '                      ' +
+          chalk.cyan('│')
+      );
+      console.log(
+        chalk.cyan('│') + '                                                 ' + chalk.cyan('│')
+      );
+      console.log(chalk.cyan('╰─────────────────────────────────────────────────╯'));
       console.log('');
 
       let options: InitOptions;
