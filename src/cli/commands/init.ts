@@ -49,15 +49,10 @@ export const initCommand = new Command('init')
         console.log(chalk.yellow('\n⚠ DRY RUN MODE - No files will be written\n'));
       }
 
-      console.log(
-        chalk.blue(`
-╔═══════════════════════════════════════════╗
-║                                           ║
-║   ${chalk.bold('🚀 Servcraft Project Generator')}          ║
-║                                           ║
-╚═══════════════════════════════════════════╝
-`)
-      );
+      console.log('');
+      console.log(chalk.cyan.bold('  🚀 Servcraft') + chalk.gray(' - Project Generator'));
+      console.log(chalk.gray('  ─'.repeat(25)));
+      console.log('');
 
       let options: InitOptions;
 
@@ -77,11 +72,11 @@ export const initCommand = new Command('init')
           {
             type: 'input',
             name: 'name',
-            message: 'Project name:',
+            message: '📦 Project name:',
             default: name || 'my-servcraft-app',
             validate: (input: string) => {
               if (!/^[a-z0-9-_]+$/i.test(input)) {
-                return 'Project name can only contain letters, numbers, hyphens, and underscores';
+                return '❌ Project name can only contain letters, numbers, hyphens, and underscores';
               }
               return true;
             },
@@ -89,51 +84,51 @@ export const initCommand = new Command('init')
           {
             type: 'list',
             name: 'language',
-            message: 'Select language:',
+            message: '💻 Select language:',
             choices: [
-              { name: 'TypeScript (Recommended)', value: 'typescript' },
-              { name: 'JavaScript', value: 'javascript' },
+              { name: '✨ TypeScript (Recommended)', value: 'typescript' },
+              { name: '   JavaScript', value: 'javascript' },
             ],
             default: 'typescript',
           },
           {
             type: 'list',
             name: 'moduleSystem',
-            message: 'Select module system:',
+            message: '📦 Select module system:',
             choices: [
-              { name: 'ESM (import/export) - Recommended', value: 'esm' },
-              { name: 'CommonJS (require/module.exports)', value: 'commonjs' },
+              { name: '✨ ESM (import/export) - Recommended', value: 'esm' },
+              { name: '   CommonJS (require/module.exports)', value: 'commonjs' },
             ],
             default: 'esm',
           },
           {
             type: 'list',
             name: 'database',
-            message: 'Select database:',
+            message: '🗄️  Select database:',
             choices: [
-              { name: 'PostgreSQL (Recommended for SQL)', value: 'postgresql' },
-              { name: 'MySQL', value: 'mysql' },
-              { name: 'SQLite (Development)', value: 'sqlite' },
-              { name: 'MongoDB (NoSQL)', value: 'mongodb' },
-              { name: 'None (Add later)', value: 'none' },
+              { name: '✨ PostgreSQL (Recommended)', value: 'postgresql' },
+              { name: '   MySQL', value: 'mysql' },
+              { name: '   SQLite (Development)', value: 'sqlite' },
+              { name: '   MongoDB (NoSQL)', value: 'mongodb' },
+              { name: '   None (Add later)', value: 'none' },
             ],
             default: 'postgresql',
           },
           {
             type: 'list',
             name: 'validator',
-            message: 'Select validation library:',
+            message: '✅ Select validation library:',
             choices: [
-              { name: 'Zod (Recommended - TypeScript-first)', value: 'zod' },
-              { name: 'Joi (Battle-tested, feature-rich)', value: 'joi' },
-              { name: 'Yup (Inspired by Joi, lighter)', value: 'yup' },
+              { name: '✨ Zod (TypeScript-first)', value: 'zod' },
+              { name: '   Joi (Battle-tested)', value: 'joi' },
+              { name: '   Yup (Lightweight)', value: 'yup' },
             ],
             default: 'zod',
           },
           {
             type: 'checkbox',
             name: 'features',
-            message: 'Select features to include:',
+            message: '🔧 Select features to include:',
             choices: [
               { name: 'Authentication (JWT)', value: 'auth', checked: true },
               { name: 'User Management', value: 'users', checked: true },
