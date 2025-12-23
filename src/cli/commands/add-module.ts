@@ -681,7 +681,13 @@ async function findServercraftModules(): Promise<string | null> {
 /**
  * Helper: Generate module files - copies from servcraft package modules
  */
-async function generateModuleFiles(moduleName: string, moduleDir: string): Promise<void> {
+async function generateModuleFiles(
+  moduleName: string,
+  moduleDir: string,
+  language: 'typescript' | 'javascript' = 'typescript',
+  moduleSystem: 'esm' | 'commonjs' = 'esm',
+  fileExtension: 'js' | 'cjs' | 'ts' = 'ts'
+): Promise<void> {
   // Map module names to their directory names in servcraft
   const moduleNameMap: Record<string, string> = {
     users: 'user',
@@ -701,7 +707,8 @@ async function generateModuleFiles(moduleName: string, moduleDir: string): Promi
 
     if (await fileExists(sourceModuleDir)) {
       // Copy from servcraft package
-      await copyModuleFromSource(sourceModuleDir, moduleDir);
+      const jsExt = language === 'javascript' ? (fileExtension as 'js' | 'cjs') : 'js';
+      await copyModuleFromSource(sourceModuleDir, moduleDir, language, moduleSystem, jsExt);
       return;
     }
   }
@@ -732,20 +739,118 @@ async function generateModuleFiles(moduleName: string, moduleDir: string): Promi
 }
 
 /**
+ * Helper: Convert ESM syntax to CommonJS
+ */
+function convertESMtoCommonJS(content: string): string {
+  return (
+    content
+      // Convert export class/function/const/let/var
+      .replace(/^export\s+class\s+/gm, 'class ')
+      .replace(/^export\s+function\s+/gm, 'function ')
+      .replace(/^export\s+const\s+/gm, 'const ')
+      .replace(/^export\s+let\s+/gm, 'let ')
+      .replace(/^export\s+var\s+/gm, 'var ')
+      // Convert named imports: import { a, b } from 'module'
+      .replace(
+        /import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]([^'"]+)['"]/g,
+        "const { $1 } = require('$2')"
+      )
+      // Convert default imports: import name from 'module'
+      .replace(/import\s+(\w+)\s+from\s*['"]([^'"]+)['"]/g, "const $1 = require('$2')")
+      // Convert mixed imports: import name, { a, b } from 'module'
+      .replace(
+        /import\s+(\w+)\s*,\s*\{\s*([^}]+)\s*\}\s*from\s*['"]([^'"]+)['"]/g,
+        "const $1 = require('$3');\nconst { $2 } = require('$3')"
+      )
+      // Add module.exports at the end for classes and main exports
+      .replace(/^(class\s+(\w+)\s+\{[\s\S]*?\n\})/gm, '$1\nmodule.exports.$2 = $2;')
+      // Handle export { ... }
+      .replace(/export\s*\{\s*([^}]+)\s*\}/g, (match, exports) => {
+        const items = exports
+          .split(',')
+          .map((item: string) => item.trim())
+          .filter(Boolean);
+        return items.map((item: string) => `module.exports.${item} = ${item};`).join('\n');
+      })
+  );
+}
+
+/**
  * Helper: Copy module from source directory
  */
-async function copyModuleFromSource(sourceDir: string, targetDir: string): Promise<void> {
+async function copyModuleFromSource(
+  sourceDir: string,
+  targetDir: string,
+  language: 'typescript' | 'javascript' = 'typescript',
+  moduleSystem: 'esm' | 'commonjs' = 'esm',
+  fileExtension: 'js' | 'cjs' = 'js'
+): Promise<void> {
   const entries = await fs.readdir(sourceDir, { withFileTypes: true });
 
   for (const entry of entries) {
     const sourcePath = path.join(sourceDir, entry.name);
-    const targetPath = path.join(targetDir, entry.name);
+    let targetPath = path.join(targetDir, entry.name);
 
     if (entry.isDirectory()) {
       await fs.mkdir(targetPath, { recursive: true });
-      await copyModuleFromSource(sourcePath, targetPath);
+      await copyModuleFromSource(sourcePath, targetPath, language, moduleSystem, fileExtension);
     } else {
-      await fs.copyFile(sourcePath, targetPath);
+      // Convert file extension if generating JavaScript
+      if (language === 'javascript' && entry.name.endsWith('.ts')) {
+        const ext = `.${fileExtension}`;
+        targetPath = targetPath.replace(/\.ts$/, ext);
+
+        // Read, convert, and write the file
+        let content = await fs.readFile(sourcePath, 'utf-8');
+
+        // Basic TypeScript to JavaScript conversion
+        // Apply replacements multiple times to catch nested patterns
+        for (let i = 0; i < 3; i++) {
+          content = content
+            // Remove import type statements
+            .replace(/import\s+type\s+\{[^}]+\}\s+from\s+['"][^'"]+['"];?\s*\n/g, '')
+            // Remove type imports from regular imports
+            .replace(/import\s+\{([^}]+)\}\s+from/g, (match, imports) => {
+              const filtered = imports
+                .split(',')
+                .map((imp: string) => imp.trim())
+                .filter((imp: string) => !imp.startsWith('type '))
+                .join(', ');
+              return filtered ? `import {${filtered}} from` : '';
+            })
+            // Update import paths
+            .replace(/from\s+['"](.+?)\.js['"]/g, `from '$1${ext}'`)
+            // Remove 'private', 'public', 'protected', 'readonly' keywords
+            .replace(/\b(private|public|protected|readonly)\s+/g, '')
+            // Remove type annotations from function parameters and variables (multiple passes)
+            .replace(
+              /:\s*[A-Z]\w+(<[^>]+>)?(\[\])?(\s*[|&]\s*[A-Z]\w+(<[^>]+>)?(\[\])?)*(?=[,)\s=\n])/g,
+              ''
+            )
+            .replace(/(\w+)\s*:\s*[^,)=\n]+([,)])/g, '$1$2')
+            .replace(/(\w+)\s*:\s*[^=\n{]+(\s*=)/g, '$1$2')
+            // Remove return type annotations
+            .replace(/\)\s*:\s*[^{=\n]+\s*([{=])/g, ') $1')
+            // Remove interface and type definitions
+            .replace(/^export\s+(interface|type)\s+[^;]+;?\s*$/gm, '')
+            .replace(/^(interface|type)\s+[^;]+;?\s*$/gm, '')
+            // Remove type assertions (as Type)
+            .replace(/\s+as\s+\w+/g, '')
+            // Remove generic type parameters
+            .replace(/<[A-Z][\w,\s<>[\]|&]*>/g, '');
+        }
+        // Final cleanup
+        content = content.replace(/^\s*\n/gm, '');
+
+        // Convert to CommonJS if needed
+        if (moduleSystem === 'commonjs') {
+          content = convertESMtoCommonJS(content);
+        }
+
+        await fs.writeFile(targetPath, content, 'utf-8');
+      } else {
+        await fs.copyFile(sourcePath, targetPath);
+      }
     }
   }
 }

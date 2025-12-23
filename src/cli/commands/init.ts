@@ -13,6 +13,7 @@ interface InitOptions {
   name: string;
   language: 'typescript' | 'javascript';
   moduleSystem: 'esm' | 'commonjs';
+  fileExtension: 'js' | 'cjs' | 'ts';
   database: 'postgresql' | 'mysql' | 'sqlite' | 'mongodb' | 'none';
   orm: 'prisma' | 'mongoose' | 'none';
   validator: 'zod' | 'joi' | 'yup';
@@ -55,26 +56,26 @@ export const initCommand = new Command('init')
       console.log(chalk.cyan('│') + '                                       ' + chalk.cyan('│'));
       console.log(
         chalk.cyan('│') +
-          '   ' +
+          '  ' +
           chalk.bold.white('🚀 Servcraft') +
           chalk.gray(' - Project Generator') +
-          '   ' +
+          '  ' +
           chalk.cyan('│')
       );
       console.log(
         chalk.cyan('│') +
-          '      ' +
+          '     ' +
           chalk.gray('by ') +
           chalk.blue('Yao Logan') +
           chalk.gray(' (@Le-Sourcier)') +
-          '     ' +
+          '    ' +
           chalk.cyan('│')
       );
       console.log(
         chalk.cyan('│') +
-          '         ' +
+          '        ' +
           chalk.bgBlue.white(' in/yao-logan ') +
-          '         ' +
+          '        ' +
           chalk.cyan('│')
       );
       console.log(chalk.cyan('│') + '                                       ' + chalk.cyan('│'));
@@ -85,17 +86,28 @@ export const initCommand = new Command('init')
 
       if (cmdOptions?.yes) {
         const db = (cmdOptions.db as InitOptions['database']) || 'postgresql';
+        const language = cmdOptions.javascript ? 'javascript' : 'typescript';
+        const moduleSystem = cmdOptions.commonjs ? 'commonjs' : 'esm';
+
+        // Determine file extension based on language and module system
+        let fileExtension: 'js' | 'cjs' | 'ts' = 'ts';
+        if (language === 'javascript') {
+          fileExtension = moduleSystem === 'commonjs' ? 'cjs' : 'js';
+        }
+
         options = {
           name: name || 'my-servcraft-app',
-          language: cmdOptions.javascript ? 'javascript' : 'typescript',
-          moduleSystem: cmdOptions.commonjs ? 'commonjs' : 'esm',
+          language,
+          moduleSystem,
+          fileExtension,
           database: db,
           orm: db === 'mongodb' ? 'mongoose' : db === 'none' ? 'none' : 'prisma',
           validator: 'zod',
           features: ['auth', 'users', 'email'],
         };
       } else {
-        const answers = await inquirer.prompt([
+        // Step 1: Basic project info and language
+        const basicAnswers = await inquirer.prompt([
           {
             type: 'input',
             name: 'name',
@@ -118,16 +130,48 @@ export const initCommand = new Command('init')
             ],
             default: 'typescript',
           },
-          {
-            type: 'list',
-            name: 'moduleSystem',
-            message: '📦 Select module system:',
-            choices: [
-              { name: '✨ ESM (import/export) - Recommended', value: 'esm' },
-              { name: '   CommonJS (require/module.exports)', value: 'commonjs' },
-            ],
-            default: 'esm',
-          },
+        ]);
+
+        // Step 2: Module system and file extension (only for JavaScript)
+        let moduleSystem: 'esm' | 'commonjs' = 'esm';
+        let fileExtension: 'js' | 'cjs' | 'ts' = 'ts';
+
+        if (basicAnswers.language === 'javascript') {
+          const jsConfigAnswers = await inquirer.prompt([
+            {
+              type: 'list',
+              name: 'moduleSystem',
+              message: '📦 Select module syntax:',
+              choices: [
+                { name: '✨ ESM (import/export)', value: 'esm' },
+                { name: '   CommonJS (require/module.exports)', value: 'commonjs' },
+              ],
+              default: 'esm',
+            },
+            {
+              type: 'list',
+              name: 'fileExtension',
+              message: '📄 Select file extension:',
+              choices: (answers: { moduleSystem: string }) => {
+                if (answers.moduleSystem === 'esm') {
+                  return [{ name: '✨ .js (standard for ESM)', value: 'js' }];
+                } else {
+                  return [
+                    { name: '✨ .cjs (explicit CommonJS)', value: 'cjs' },
+                    { name: '   .js (CommonJS in .js)', value: 'js' },
+                  ];
+                }
+              },
+              default: (answers: { moduleSystem: string }) =>
+                answers.moduleSystem === 'esm' ? 'js' : 'cjs',
+            },
+          ]);
+          moduleSystem = jsConfigAnswers.moduleSystem;
+          fileExtension = jsConfigAnswers.fileExtension;
+        }
+
+        // Step 3: Database, validator, and features
+        const restAnswers = await inquirer.prompt([
           {
             type: 'list',
             name: 'database',
@@ -166,6 +210,14 @@ export const initCommand = new Command('init')
             ],
           },
         ]);
+
+        // Combine all answers
+        const answers = {
+          ...basicAnswers,
+          moduleSystem,
+          fileExtension,
+          ...restAnswers,
+        };
 
         // Auto-determine ORM based on database choice
         const db = answers.database as InitOptions['database'];
@@ -315,7 +367,13 @@ export const initCommand = new Command('init')
               moduleSpinner.text = `Installing ${feature} module...`;
               const moduleDir = path.join(projectDir, 'src/modules', feature);
               await ensureDir(moduleDir);
-              await generateModuleFiles(feature, moduleDir);
+              await generateModuleFiles(
+                feature,
+                moduleDir,
+                options.language,
+                options.moduleSystem,
+                options.fileExtension
+              );
             }
             moduleSpinner.succeed(`${options.features.length} module(s) installed!`);
           } catch (err) {
