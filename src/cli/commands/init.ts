@@ -50,38 +50,34 @@ export const initCommand = new Command('init')
       }
 
       console.log('');
-      console.log(chalk.cyan('╭─────────────────────────────────────────────────╮'));
-      console.log(
-        chalk.cyan('│') + '                                                 ' + chalk.cyan('│')
-      );
+      console.log(chalk.cyan('╭───────────────────────────────────────╮'));
+      console.log(chalk.cyan('│') + '                                       ' + chalk.cyan('│'));
       console.log(
         chalk.cyan('│') +
-          '       ' +
+          '     ' +
           chalk.bold.white('🚀 Servcraft') +
           chalk.gray(' - Project Generator') +
-          '       ' +
+          '     ' +
           chalk.cyan('│')
       );
       console.log(
         chalk.cyan('│') +
-          '            ' +
+          '        ' +
           chalk.gray('by ') +
           chalk.blue('Yao Logan') +
           chalk.gray(' (@Le-Sourcier)') +
-          '          ' +
+          '       ' +
           chalk.cyan('│')
       );
       console.log(
         chalk.cyan('│') +
-          '      ' +
-          chalk.dim.underline('linkedin.com/in/yao-logan') +
+          '           ' +
+          chalk.bgBlue.white(' in/yao-logan ') +
           '           ' +
           chalk.cyan('│')
       );
-      console.log(
-        chalk.cyan('│') + '                                                 ' + chalk.cyan('│')
-      );
-      console.log(chalk.cyan('╰─────────────────────────────────────────────────╯'));
+      console.log(chalk.cyan('│') + '                                       ' + chalk.cyan('│'));
+      console.log(chalk.cyan('╰───────────────────────────────────────╯'));
       console.log('');
 
       let options: InitOptions;
