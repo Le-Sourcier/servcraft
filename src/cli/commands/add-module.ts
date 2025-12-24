@@ -742,37 +742,69 @@ async function generateModuleFiles(
  * Helper: Convert ESM syntax to CommonJS
  */
 function convertESMtoCommonJS(content: string): string {
-  return (
-    content
-      // Convert export class/function/const/let/var
-      .replace(/^export\s+class\s+/gm, 'class ')
-      .replace(/^export\s+function\s+/gm, 'function ')
-      .replace(/^export\s+const\s+/gm, 'const ')
-      .replace(/^export\s+let\s+/gm, 'let ')
-      .replace(/^export\s+var\s+/gm, 'var ')
-      // Convert named imports: import { a, b } from 'module'
-      .replace(
-        /import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]([^'"]+)['"]/g,
-        "const { $1 } = require('$2')"
-      )
-      // Convert default imports: import name from 'module'
-      .replace(/import\s+(\w+)\s+from\s*['"]([^'"]+)['"]/g, "const $1 = require('$2')")
-      // Convert mixed imports: import name, { a, b } from 'module'
-      .replace(
-        /import\s+(\w+)\s*,\s*\{\s*([^}]+)\s*\}\s*from\s*['"]([^'"]+)['"]/g,
-        "const $1 = require('$3');\nconst { $2 } = require('$3')"
-      )
-      // Add module.exports at the end for classes and main exports
-      .replace(/^(class\s+(\w+)\s+\{[\s\S]*?\n\})/gm, '$1\nmodule.exports.$2 = $2;')
-      // Handle export { ... }
-      .replace(/export\s*\{\s*([^}]+)\s*\}/g, (match, exports) => {
-        const items = exports
-          .split(',')
-          .map((item: string) => item.trim())
-          .filter(Boolean);
-        return items.map((item: string) => `module.exports.${item} = ${item};`).join('\n');
-      })
-  );
+  const exportedClasses: string[] = [];
+  const exportedItems: string[] = [];
+
+  // Track exported items
+  let converted = content
+    // Track and convert export class
+    .replace(/^export\s+class\s+(\w+)/gm, (match, className) => {
+      exportedClasses.push(className);
+      return `class ${className}`;
+    })
+    // Convert export function/const/let/var
+    .replace(/^export\s+function\s+(\w+)/gm, (match, funcName) => {
+      exportedItems.push(funcName);
+      return `function ${funcName}`;
+    })
+    .replace(/^export\s+const\s+(\w+)/gm, (match, varName) => {
+      exportedItems.push(varName);
+      return `const ${varName}`;
+    })
+    .replace(/^export\s+let\s+(\w+)/gm, (match, varName) => {
+      exportedItems.push(varName);
+      return `let ${varName}`;
+    })
+    .replace(/^export\s+var\s+(\w+)/gm, (match, varName) => {
+      exportedItems.push(varName);
+      return `var ${varName}`;
+    })
+    // Convert named imports: import { a, b } from 'module'
+    .replace(
+      /import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]([^'"]+)['"]/g,
+      "const { $1 } = require('$2')"
+    )
+    // Convert default imports: import name from 'module'
+    .replace(/import\s+(\w+)\s+from\s*['"]([^'"]+)['"]/g, "const $1 = require('$2')")
+    // Convert mixed imports: import name, { a, b } from 'module'
+    .replace(
+      /import\s+(\w+)\s*,\s*\{\s*([^}]+)\s*\}\s*from\s*['"]([^'"]+)['"]/g,
+      "const $1 = require('$3');\nconst { $2 } = require('$3')"
+    )
+    // Handle export { ... }
+    .replace(/export\s*\{\s*([^}]+)\s*\}/g, (match, exports) => {
+      const items = exports
+        .split(',')
+        .map((item: string) => item.trim())
+        .filter(Boolean);
+      exportedItems.push(...items);
+      return '';
+    });
+
+  // Add module.exports at the end of file
+  const exports: string[] = [];
+  exportedClasses.forEach((className) => {
+    exports.push(`module.exports.${className} = ${className};`);
+  });
+  exportedItems.forEach((itemName) => {
+    exports.push(`module.exports.${itemName} = ${itemName};`);
+  });
+
+  if (exports.length > 0) {
+    converted += '\n\n' + exports.join('\n');
+  }
+
+  return converted;
 }
 
 /**
@@ -823,11 +855,25 @@ async function copyModuleFromSource(
             // Remove 'private', 'public', 'protected', 'readonly' keywords
             .replace(/\b(private|public|protected|readonly)\s+/g, '')
             // Remove class property type annotations: "prop: Type = value" -> "prop = value"
-            .replace(/(\w+)\s*:\s*[^=;]+\s*=/g, '$1 =')
+            .replace(/^(\s+)(\w+)\s*:\s*[^=;]+\s*=/gm, '$1$2 =')
             // Remove class property type annotations without value: "prop: Type;" -> ""
             .replace(/^\s*(\w+)\s*:\s*[^;=\n]+;?\s*$/gm, '')
-            // Remove optional parameter markers and types: "param?: Type" -> "param"
-            .replace(/(\w+)\??\s*:\s*[^,)=\n]+/g, '$1')
+            // Remove function/method/constructor parameter types
+            .replace(
+              /(function\s+\w+|constructor|async\s+\w+|\w+)\s*\(([\s\S]*?)\)\s*(:[\s\S]*?)?(\{|=>)/g,
+              (match, prefix, params, returnType, suffix) => {
+                // Handle each parameter separately
+                const cleaned = params
+                  .split(',')
+                  .map((param: string) => {
+                    // Remove optional marker and type: "param?: Type" or "param: Type" -> "param"
+                    return param.replace(/(\w+)\??\s*:\s*[^,=]+(\s*=\s*[^,]+)?/, '$1$2').trim();
+                  })
+                  .filter(Boolean)
+                  .join(', ');
+                return `${prefix}(${cleaned})${suffix}`;
+              }
+            )
             // Remove return type annotations
             .replace(/\)\s*:\s*[^{=\n]+\s*([{=])/g, ') $1')
             // Remove interface and type definitions
@@ -837,8 +883,8 @@ async function copyModuleFromSource(
             .replace(/\s+as\s+\w+/g, '')
             // Remove generic type parameters
             .replace(/<[A-Z][\w,\s<>[\]|&]*>/g, '')
-            // Remove union types in variable declarations: "var | null" -> "var"
-            .replace(/(\w+)\s*\|\s*\w+\s*=/g, '$1 =');
+            // Remove union types in variable declarations: "var | null = value" -> "var = value"
+            .replace(/(\w+)\s*:\s*[^=]+\|\s*[^=]+\s*=/g, '$1 =');
         }
         // Final cleanup
         content = content.replace(/^\s*\n/gm, '');
