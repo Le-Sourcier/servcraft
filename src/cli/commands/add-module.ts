@@ -822,13 +822,12 @@ async function copyModuleFromSource(
             .replace(/from\s+['"](.+?)\.js['"]/g, `from '$1${ext}'`)
             // Remove 'private', 'public', 'protected', 'readonly' keywords
             .replace(/\b(private|public|protected|readonly)\s+/g, '')
-            // Remove type annotations from function parameters and variables (multiple passes)
-            .replace(
-              /:\s*[A-Z]\w+(<[^>]+>)?(\[\])?(\s*[|&]\s*[A-Z]\w+(<[^>]+>)?(\[\])?)*(?=[,)\s=\n])/g,
-              ''
-            )
-            .replace(/(\w+)\s*:\s*[^,)=\n]+([,)])/g, '$1$2')
-            .replace(/(\w+)\s*:\s*[^=\n{]+(\s*=)/g, '$1$2')
+            // Remove class property type annotations: "prop: Type = value" -> "prop = value"
+            .replace(/(\w+)\s*:\s*[^=;]+\s*=/g, '$1 =')
+            // Remove class property type annotations without value: "prop: Type;" -> ""
+            .replace(/^\s*(\w+)\s*:\s*[^;=\n]+;?\s*$/gm, '')
+            // Remove optional parameter markers and types: "param?: Type" -> "param"
+            .replace(/(\w+)\??\s*:\s*[^,)=\n]+/g, '$1')
             // Remove return type annotations
             .replace(/\)\s*:\s*[^{=\n]+\s*([{=])/g, ') $1')
             // Remove interface and type definitions
@@ -837,7 +836,9 @@ async function copyModuleFromSource(
             // Remove type assertions (as Type)
             .replace(/\s+as\s+\w+/g, '')
             // Remove generic type parameters
-            .replace(/<[A-Z][\w,\s<>[\]|&]*>/g, '');
+            .replace(/<[A-Z][\w,\s<>[\]|&]*>/g, '')
+            // Remove union types in variable declarations: "var | null" -> "var"
+            .replace(/(\w+)\s*\|\s*\w+\s*=/g, '$1 =');
         }
         // Final cleanup
         content = content.replace(/^\s*\n/gm, '');
