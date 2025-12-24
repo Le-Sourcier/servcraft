@@ -836,7 +836,25 @@ async function copyModuleFromSource(
         let content = await fs.readFile(sourcePath, 'utf-8');
 
         // Basic TypeScript to JavaScript conversion
-        // Apply replacements multiple times to catch nested patterns
+        // Step 1: Remove 'private', 'public', 'protected', 'readonly' keywords FIRST
+        content = content.replace(/\b(private|public|protected|readonly)\s+/g, '');
+
+        // Step 2: Handle constructors specially (they often have these modifiers)
+        content = content.replace(/constructor\s*\(([\s\S]*?)\)\s*\{\s*\}/g, (match, params) => {
+          // Clean parameters: remove types and optional markers
+          const cleanedParams = params
+            .split(',')
+            .map((param: string) => {
+              // Extract just the parameter name, removing type annotations
+              const paramMatch = param.trim().match(/^\s*(\w+)/);
+              return paramMatch ? paramMatch[1] : '';
+            })
+            .filter(Boolean)
+            .join(', ');
+          return `constructor(${cleanedParams}) {}`;
+        });
+
+        // Step 3: Apply other replacements multiple times
         for (let i = 0; i < 3; i++) {
           content = content
             // Remove import type statements
@@ -852,30 +870,26 @@ async function copyModuleFromSource(
             })
             // Update import paths
             .replace(/from\s+['"](.+?)\.js['"]/g, `from '$1${ext}'`)
-            // Remove 'private', 'public', 'protected', 'readonly' keywords
-            .replace(/\b(private|public|protected|readonly)\s+/g, '')
             // Remove class property type annotations: "prop: Type = value" -> "prop = value"
             .replace(/^(\s+)(\w+)\s*:\s*[^=;]+\s*=/gm, '$1$2 =')
             // Remove class property type annotations without value: "prop: Type;" -> ""
             .replace(/^\s*(\w+)\s*:\s*[^;=\n]+;?\s*$/gm, '')
-            // Remove function/method/constructor parameter types
+            // Remove method parameter types (NOT constructor, already handled)
             .replace(
-              /(function\s+\w+|constructor|async\s+\w+|\w+)\s*\(([\s\S]*?)\)\s*(:[\s\S]*?)?(\{|=>)/g,
-              (match, prefix, params, returnType, suffix) => {
-                // Handle each parameter separately
+              /(async\s+)?(\w+)\s*\(([^)]*)\)\s*:\s*[^{]+\s*\{/g,
+              (match, asyncKeyword, methodName, params) => {
+                if (methodName === 'constructor') return match; // Skip constructors
                 const cleaned = params
                   .split(',')
                   .map((param: string) => {
-                    // Remove optional marker and type: "param?: Type" or "param: Type" -> "param"
-                    return param.replace(/(\w+)\??\s*:\s*[^,=]+(\s*=\s*[^,]+)?/, '$1$2').trim();
+                    const paramMatch = param.trim().match(/^(\w+)/);
+                    return paramMatch ? paramMatch[1] : '';
                   })
                   .filter(Boolean)
                   .join(', ');
-                return `${prefix}(${cleaned})${suffix}`;
+                return `${asyncKeyword || ''}${methodName}(${cleaned}) {`;
               }
             )
-            // Remove return type annotations
-            .replace(/\)\s*:\s*[^{=\n]+\s*([{=])/g, ') $1')
             // Remove interface and type definitions
             .replace(/^export\s+(interface|type)\s+[^;]+;?\s*$/gm, '')
             .replace(/^(interface|type)\s+[^;]+;?\s*$/gm, '')
@@ -883,7 +897,7 @@ async function copyModuleFromSource(
             .replace(/\s+as\s+\w+/g, '')
             // Remove generic type parameters
             .replace(/<[A-Z][\w,\s<>[\]|&]*>/g, '')
-            // Remove union types in variable declarations: "var | null = value" -> "var = value"
+            // Remove union types in variable declarations
             .replace(/(\w+)\s*:\s*[^=]+\|\s*[^=]+\s*=/g, '$1 =');
         }
         // Final cleanup
