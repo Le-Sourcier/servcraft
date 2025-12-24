@@ -275,10 +275,8 @@ export const initCommand = new Command('init')
         );
 
         // Create directory structure
-        // For JS: .js for ESM, .cjs for CommonJS
-        // For TS: always .ts (output format handled by tsup)
-        const ext =
-          options.language === 'typescript' ? 'ts' : options.moduleSystem === 'esm' ? 'js' : 'cjs';
+        // Determine file extension from options
+        const ext = options.language === 'typescript' ? 'ts' : options.fileExtension;
         const dirs = [
           'src/core',
           'src/config',
