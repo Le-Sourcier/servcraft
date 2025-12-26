@@ -10,9 +10,12 @@ This document outlines the planned features and improvements for Servcraft.
 |-------|--------|-------------|
 | Phase 1 (v0.2.x) | ✅ Complete | Core CLI Improvements |
 | Phase 2 (v0.3.x) | ✅ Complete | Testing & Quality |
-| Phase 3 (v0.4.x) | ✅ Complete | Advanced Features |
-| Phase 4 (v0.5.x) | 🚧 Next | Enterprise Features |
+| Phase 3 (v0.4.x) | 🔄 In Progress | Advanced Features |
+| Phase 4 (v0.5.x) | ⏳ Next | Enterprise Features |
 | Phase 5 (v1.0.x) | ⏳ Planned | Stable Release |
+
+### Current Work: v0.4.10 - Swagger UI Live Documentation
+Progress: **0/24 tasks** (0%)
 
 ---
 
@@ -96,6 +99,90 @@ This document outlines the planned features and improvements for Servcraft.
 | audit | Audit logging | ✅ |
 | notifications | Push notifications | ✅ |
 | settings | App settings | ✅ |
+
+---
+
+## 🔄 In Progress
+
+### v0.4.10 - Swagger UI Live Documentation
+**Status:** 🔄 In Progress
+**Priority:** High
+**Complexity:** Medium
+**Started:** 2024-12-26
+
+Documentation Swagger/OpenAPI en temps réel avec auto-génération.
+
+```bash
+# Après démarrage du serveur
+GET /docs          → Swagger UI (interface visuelle)
+GET /docs/json     → OpenAPI spec en JSON
+GET /docs/yaml     → OpenAPI spec en YAML
+```
+
+**Objectif:** Quand on fait `servcraft add [module]`, la documentation est automatiquement générée pour toutes les routes du module.
+
+---
+
+#### Checklist d'implémentation
+
+##### Phase 1: Infrastructure de base
+- [ ] Ajouter `@fastify/swagger` et `@fastify/swagger-ui` aux dépendances des projets générés
+- [ ] Créer le fichier de configuration Swagger (`src/config/swagger.ts`)
+- [ ] Intégrer le plugin Swagger dans le serveur Fastify (`src/core/server.ts`)
+- [ ] Tester que `/docs` affiche Swagger UI
+- [ ] Tester que `/docs/json` retourne la spec OpenAPI
+
+##### Phase 2: Templates TypeScript
+- [ ] Mettre à jour le template `init` pour inclure Swagger (TypeScript)
+- [ ] Ajouter les schémas OpenAPI au module `auth`
+- [ ] Ajouter les schémas OpenAPI au module `users`
+- [ ] Ajouter les schémas OpenAPI aux autres modules (email, cache, upload, etc.)
+- [ ] Tester la génération complète TypeScript avec `servcraft init test-ts --ts`
+
+##### Phase 3: Templates JavaScript
+- [ ] Adapter la configuration Swagger pour JavaScript ESM (.js)
+- [ ] Adapter la configuration Swagger pour JavaScript CommonJS (.cjs)
+- [ ] Tester `servcraft init test-esm --js --esm`
+- [ ] Tester `servcraft init test-cjs --js --cjs`
+
+##### Phase 4: Auto-génération lors de `servcraft add`
+- [ ] Mettre à jour `add-module.ts` pour inclure les schémas OpenAPI
+- [ ] Tester `servcraft add auth` et vérifier que `/docs` se met à jour
+- [ ] Tester `servcraft add users` et vérifier que `/docs` se met à jour
+- [ ] Tester avec tous les modules disponibles
+
+##### Phase 5: Tests et validation
+- [ ] Écrire des tests unitaires pour la configuration Swagger
+- [ ] Écrire des tests d'intégration pour `/docs` endpoint
+- [ ] Vérifier que `npm run build` passe sans erreurs
+- [ ] Vérifier que `npm run lint` passe sans erreurs
+- [ ] Vérifier que `npm run typecheck` passe sans erreurs
+- [ ] Vérifier que `npm test` passe sans erreurs
+
+##### Phase 6: Documentation et release
+- [ ] Mettre à jour le README avec les nouvelles fonctionnalités
+- [ ] Mettre à jour le ROADMAP (marquer comme complété)
+- [ ] Commit final avec message descriptif
+- [ ] Push vers GitHub
+- [ ] Publier v0.4.10 sur npm
+
+---
+
+**Dépendances npm à ajouter aux projets générés:**
+```json
+{
+  "@fastify/swagger": "^8.x",
+  "@fastify/swagger-ui": "^2.x"
+}
+```
+
+**Routes générées:**
+| Route | Description |
+|-------|-------------|
+| `GET /docs` | Swagger UI interface |
+| `GET /docs/json` | OpenAPI 3.0 spec (JSON) |
+| `GET /docs/yaml` | OpenAPI 3.0 spec (YAML) |
+| `GET /docs/static/*` | Assets Swagger UI |
 
 ---
 
