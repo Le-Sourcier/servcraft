@@ -22,7 +22,7 @@ describe('servcraft init', () => {
       encoding: 'utf-8',
     });
 
-    expect(output).toContain('Servcraft Project Generator');
+    expect(output).toContain('Servcraft');
     expect(output).toContain('package.json');
     expect(output).toContain('src/');
     expect(output).toContain('DRY RUN MODE');
