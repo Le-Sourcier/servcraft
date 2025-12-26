@@ -15,7 +15,7 @@ This document outlines the planned features and improvements for Servcraft.
 | Phase 5 (v1.0.x) | ⏳ Planned | Stable Release |
 
 ### Current Work: v0.4.10 - Swagger UI Live Documentation
-Progress: **0/24 tasks** (0%)
+Progress: **5/24 tasks** (21%) - Phase 1 Complete ✅
 
 ---
 
@@ -125,12 +125,12 @@ GET /docs/yaml     → OpenAPI spec en YAML
 
 #### Checklist d'implémentation
 
-##### Phase 1: Infrastructure de base
-- [ ] Ajouter `@fastify/swagger` et `@fastify/swagger-ui` aux dépendances des projets générés
-- [ ] Créer le fichier de configuration Swagger (`src/config/swagger.ts`)
-- [ ] Intégrer le plugin Swagger dans le serveur Fastify (`src/core/server.ts`)
-- [ ] Tester que `/docs` affiche Swagger UI
-- [ ] Tester que `/docs/json` retourne la spec OpenAPI
+##### Phase 1: Infrastructure de base ✅
+- [x] Ajouter `@fastify/swagger` et `@fastify/swagger-ui` aux dépendances des projets générés
+- [x] Créer le fichier de configuration Swagger (`src/config/swagger.ts`)
+- [x] Intégrer le plugin Swagger dans le serveur Fastify (`src/core/server.ts`)
+- [x] Tester que `/docs` affiche Swagger UI
+- [x] Tester que `/docs/json` retourne la spec OpenAPI
 
 ##### Phase 2: Templates TypeScript
 - [ ] Mettre à jour le template `init` pour inclure Swagger (TypeScript)

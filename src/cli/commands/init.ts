@@ -318,6 +318,12 @@ export const initCommand = new Command('init')
           generateConfigFile(options)
         );
 
+        // Generate Swagger config file
+        await writeFile(
+          path.join(projectDir, `src/config/swagger.${ext}`),
+          generateSwaggerConfig(options)
+        );
+
         // Generate middleware file
         await writeFile(
           path.join(projectDir, `src/middleware/index.${ext}`),
@@ -488,6 +494,8 @@ function generatePackageJson(options: InitOptions): Record<string, unknown> {
       '@fastify/jwt': '^8.0.1',
       '@fastify/rate-limit': '^9.1.0',
       '@fastify/cookie': '^9.3.1',
+      '@fastify/swagger': '^8.14.0',
+      '@fastify/swagger-ui': '^3.0.0',
       pino: '^9.5.0',
       'pino-pretty': '^11.3.0',
       bcryptjs: '^2.4.3',
@@ -823,9 +831,8 @@ import { createServer } from './core/server.${fileExt}';
 import { logger } from './core/logger.${fileExt}';
 
 async function main()${isTS ? ': Promise<void>' : ''} {
-  const server = createServer();
-
   try {
+    const server = await createServer();
     await server.start();
   } catch (error) {
     logger.error({ err: error }, 'Failed to start server');
@@ -842,9 +849,8 @@ const { createServer } = require('./core/server.cjs');
 const { logger } = require('./core/logger.cjs');
 
 async function main() {
-  const server = createServer();
-
   try {
+    const server = await createServer();
     await server.start();
   } catch (error) {
     logger.error({ err: error }, 'Failed to start server');
@@ -864,8 +870,26 @@ function generateServerFile(options: InitOptions): string {
 
   const serverBody = `  const app = Fastify({ logger });
 
-  // Health check
-  app.get('/health', async () => ({
+  // Register Swagger documentation
+  await registerSwagger(app);
+
+  // Health check with OpenAPI schema
+  app.get('/health', {
+    schema: {
+      tags: ['Health'],
+      summary: 'Health check endpoint',
+      description: 'Returns the health status of the API',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            status: { type: 'string', example: 'ok' },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+    },
+  }, async () => ({
     status: 'ok',
     timestamp: new Date().toISOString(),
   }));
@@ -887,6 +911,7 @@ function generateServerFile(options: InitOptions): string {
       const host = process.env.HOST || '0.0.0.0';
       await app.listen({ port, host });
       logger.info(\`Server listening on \${host}:\${port}\`);
+      logger.info(\`API Documentation available at http://\${host}:\${port}/docs\`);
     },
   };
 }`;
@@ -895,16 +920,18 @@ function generateServerFile(options: InitOptions): string {
     return `import Fastify from 'fastify';
 ${isTS ? "import type { FastifyInstance } from 'fastify';" : ''}
 import { logger } from './logger.${fileExt}';
+import { registerSwagger } from '../config/swagger.${fileExt}';
 
-${isTS ? 'export function createServer(): { instance: FastifyInstance; start: () => Promise<void> }' : 'export function createServer()'} {
+${isTS ? 'export async function createServer(): Promise<{ instance: FastifyInstance; start: () => Promise<void> }>' : 'export async function createServer()'} {
 ${serverBody}
 `;
   } else {
     // CommonJS
     return `const Fastify = require('fastify');
 const { logger } = require('./logger.cjs');
+const { registerSwagger } = require('../config/swagger.cjs');
 
-function createServer() {
+async function createServer() {
 ${serverBody}
 
 module.exports = { createServer };
@@ -1125,6 +1152,92 @@ export const config = ${configBody};
 const config = ${configBody};
 
 module.exports = { config };
+`;
+  }
+}
+
+function generateSwaggerConfig(options: InitOptions): string {
+  const isTS = options.language === 'typescript';
+  const isESM = options.moduleSystem === 'esm';
+
+  const swaggerOptions = `{
+  openapi: {
+    info: {
+      title: '${options.name} API',
+      description: 'API documentation for ${options.name}',
+      version: '1.0.0',
+      contact: {
+        name: 'API Support',
+      },
+    },
+    servers: [
+      {
+        url: \`http://\${process.env.HOST || 'localhost'}:\${process.env.PORT || 3000}\`,
+        description: 'Development server',
+      },
+    ],
+    tags: [
+      { name: 'Health', description: 'Health check endpoints' },
+      { name: 'Auth', description: 'Authentication endpoints' },
+      { name: 'Users', description: 'User management endpoints' },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+  },
+}`;
+
+  const swaggerUiOptions = `{
+  routePrefix: '/docs',
+  uiConfig: {
+    docExpansion: 'list',
+    deepLinking: true,
+    displayRequestDuration: true,
+  },
+  staticCSP: true,
+  transformStaticCSP: (header${isTS ? ': string' : ''}) => header,
+}`;
+
+  if (isESM || isTS) {
+    return `${isTS ? "import type { FastifyInstance } from 'fastify';\n" : ''}import fastifySwagger from '@fastify/swagger';
+import fastifySwaggerUi from '@fastify/swagger-ui';
+
+export const swaggerOptions = ${swaggerOptions};
+
+export const swaggerUiOptions = ${swaggerUiOptions};
+
+/**
+ * Register Swagger documentation plugins
+ */
+export async function registerSwagger(app${isTS ? ': FastifyInstance' : ''})${isTS ? ': Promise<void>' : ''} {
+  await app.register(fastifySwagger, swaggerOptions);
+  await app.register(fastifySwaggerUi, swaggerUiOptions);
+}
+`;
+  } else {
+    // CommonJS
+    return `const fastifySwagger = require('@fastify/swagger');
+const fastifySwaggerUi = require('@fastify/swagger-ui');
+
+const swaggerOptions = ${swaggerOptions};
+
+const swaggerUiOptions = ${swaggerUiOptions};
+
+/**
+ * Register Swagger documentation plugins
+ */
+async function registerSwagger(app) {
+  await app.register(fastifySwagger, swaggerOptions);
+  await app.register(fastifySwaggerUi, swaggerUiOptions);
+}
+
+module.exports = { swaggerOptions, swaggerUiOptions, registerSwagger };
 `;
   }
 }
