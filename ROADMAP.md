@@ -15,7 +15,7 @@ This document outlines the planned features and improvements for Servcraft.
 | Phase 5 (v1.0.x) | ⏳ Planned | Stable Release |
 
 ### Current Work: v0.4.10 - Swagger UI Live Documentation
-Progress: **5/24 tasks** (21%) - Phase 1 Complete ✅
+Progress: **7/24 tasks** (29%) - Phase 1 & 2 (partial) Complete ✅
 
 ---
 
@@ -132,10 +132,10 @@ GET /docs/yaml     → OpenAPI spec en YAML
 - [x] Tester que `/docs` affiche Swagger UI
 - [x] Tester que `/docs/json` retourne la spec OpenAPI
 
-##### Phase 2: Templates TypeScript
-- [ ] Mettre à jour le template `init` pour inclure Swagger (TypeScript)
-- [ ] Ajouter les schémas OpenAPI au module `auth`
-- [ ] Ajouter les schémas OpenAPI au module `users`
+##### Phase 2: Templates TypeScript (In Progress)
+- [x] Mettre à jour le template `init` pour inclure Swagger (TypeScript)
+- [x] Ajouter les schémas OpenAPI au module `auth`
+- [x] Ajouter les schémas OpenAPI au module `users`
 - [ ] Ajouter les schémas OpenAPI aux autres modules (email, cache, upload, etc.)
 - [ ] Tester la génération complète TypeScript avec `servcraft init test-ts --ts`
 
