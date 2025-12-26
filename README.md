@@ -4,6 +4,9 @@ A modular, production-ready Node.js backend framework built with TypeScript, Fas
 
 [![npm version](https://badge.fury.io/js/servcraft.svg)](https://www.npmjs.com/package/servcraft)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
+
+> **Current Version: v0.4.9** - Flexible JavaScript module system (ESM/CommonJS + .js/.cjs)
 
 ## Installation
 
@@ -46,6 +49,40 @@ npm run dev
 - **Logging**: Pino structured logs + Audit trail
 - **Docker**: Ready for containerization
 - **CLI**: Generate modules, controllers, services
+
+---
+
+## What's Implemented vs Coming Soon
+
+### ✅ Fully Implemented
+
+| Category | Features |
+|----------|----------|
+| **CLI Commands** | `init`, `add`, `generate`, `scaffold`, `list`, `remove`, `update`, `doctor`, `completion`, `templates`, `docs`, `db` |
+| **Database** | `db migrate`, `db push`, `db generate`, `db seed`, `db reset`, `db status`, `db studio` |
+| **Documentation** | `docs generate`, `docs export` (Postman/Insomnia/YAML), `docs status` |
+| **Languages** | TypeScript, JavaScript (ESM + .js, CommonJS + .js, CommonJS + .cjs) |
+| **Validators** | Zod, Joi, Yup |
+| **Databases** | PostgreSQL, MySQL, SQLite, MongoDB |
+| **Modules** | auth, users, email, cache, upload, audit, notifications, settings, rate-limit, webhook, queue, websocket, search, i18n, feature-flag, analytics, media-processing, api-versioning |
+
+### 🚧 Coming Soon (v0.5.x)
+
+| Feature | Description | Priority |
+|---------|-------------|----------|
+| **Plugin System** | Third-party plugins to extend Servcraft (`servcraft plugin install/list/remove`) | High |
+| **Deployment Helpers** | Generate Docker, PM2, systemd, Vercel, Railway, Fly.io configs | High |
+| **Monorepo Support** | Workspace management for multi-package projects | Medium |
+| **Eject Command** | Export all internal configs for full customization | Low |
+
+### 💡 Future Ideas (v1.0+)
+
+- **GUI Dashboard** - Web-based project management interface
+- **GraphQL Support** - Native GraphQL module and generators
+- **Microservices** - Service mesh, message queues, service discovery
+- **Fastify 5** - Migration when released
+
+> See [ROADMAP.md](./ROADMAP.md) for detailed implementation plans
 
 ## How to Use the Services
 
@@ -1442,6 +1479,24 @@ npm run db:push         # Push schema
 npm run db:studio       # Open Prisma Studio
 npm run db:seed         # Seed database
 ```
+
+## Contributing
+
+We welcome contributions! See our [ROADMAP.md](./ROADMAP.md) for planned features.
+
+**Ways to contribute:**
+- Report bugs and issues
+- Suggest new features
+- Submit pull requests
+- Improve documentation
+
+## Roadmap
+
+See [ROADMAP.md](./ROADMAP.md) for:
+- Detailed version history
+- Full list of implemented features
+- Upcoming features with specifications
+- Future ideas and considerations
 
 ## License
 
