@@ -431,24 +431,26 @@ export default function PlaygroundPage() {
     <div className="min-h-screen bg-background flex flex-col">
       {/* Compact Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur-lg">
-        <div className="max-w-7xl mx-auto px-4 h-12 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          {/* Left Section */}
+          <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                 <Terminal className="w-4 h-4 text-white" />
               </div>
               <span className="font-semibold gradient-text">Playground</span>
             </Link>
-            <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground">
-              <span className="px-1.5 py-0.5 rounded bg-secondary/50">Ctrl+Enter to run</span>
-              <span>•</span>
-              <span>5s timeout</span>
-              <span>•</span>
-              <span>50MB limit</span>
+            <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="px-1.5 py-0.5 rounded bg-secondary/50">Ctrl+Enter</span>
+              <span className="hidden md:inline">•</span>
+              <span className="hidden md:inline">5s timeout</span>
+              <span className="hidden md:inline">•</span>
+              <span className="hidden md:inline">50MB</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Right Section - Controls */}
+          <div className="flex items-center gap-1">
             {/* Templates Dropdown */}
             <div className="relative">
               <Button
@@ -458,10 +460,10 @@ export default function PlaygroundPage() {
                   setShowTemplates(!showTemplates);
                   setShowModules(false);
                 }}
-                className="gap-1 h-8 text-xs"
+                className="gap-1 h-8 text-xs px-2 sm:px-3"
               >
-                <FileCode className="w-3 h-3" />
-                <span className="hidden sm:inline">Templates</span>
+                <FileCode className="w-3.5 h-3.5" />
+                <span className="hidden xs:inline">Templates</span>
                 <ChevronDown className={cn("w-3 h-3 transition-transform", showTemplates && "rotate-180")} />
               </Button>
 
@@ -502,12 +504,12 @@ export default function PlaygroundPage() {
                   setShowModules(!showModules);
                   setShowTemplates(false);
                 }}
-                className="gap-1 h-8 text-xs"
+                className="gap-1 h-8 text-xs px-2 sm:px-3"
               >
-                <Sparkles className="w-3 h-3" />
-                <span className="hidden sm:inline">Modules</span>
+                <Sparkles className="w-3.5 h-3.5" />
+                <span className="hidden xs:inline">Modules</span>
                 {selectedModules.length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 text-xs bg-primary text-primary-foreground rounded-full">
+                  <span className="ml-0.5 px-1.5 py-0.5 text-xs bg-primary text-primary-foreground rounded-full">
                     {selectedModules.length}
                   </span>
                 )}
@@ -554,21 +556,21 @@ export default function PlaygroundPage() {
               )}
             </div>
 
-            <div className="h-6 w-px bg-border" />
+            <div className="h-5 w-px bg-border mx-1" />
 
             {/* Run Button */}
             <Button
               onClick={runCode}
               disabled={isRunning}
               size="sm"
-              className="gap-1 h-8"
+              className="gap-1 h-8 px-3 sm:px-4"
             >
               {isRunning ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
-                <Play className="w-3 h-3" />
+                <Play className="w-3.5 h-3.5" />
               )}
-              <span className="hidden sm:inline">{isRunning ? "Running..." : "Run"}</span>
+              <span className="hidden xs:inline font-medium">{isRunning ? "Running..." : "Run"}</span>
             </Button>
           </div>
         </div>
@@ -576,7 +578,7 @@ export default function PlaygroundPage() {
 
       {/* Main Content - Full height minus compact header */}
       <div className="flex-1 max-w-7xl mx-auto w-full p-4">
-        <div className="grid lg:grid-cols-2 gap-4 h-[calc(100vh-8rem)]">
+        <div className="grid lg:grid-cols-2 gap-4 h-[calc(100vh-10rem)] sm:h-[calc(100vh-8rem)]">
           {/* Code Editor */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
