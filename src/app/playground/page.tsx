@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { motion } from "framer-motion";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Terminal,
   Play,
@@ -24,710 +24,1005 @@ import {
   Mail,
   HardDrive,
   Radio,
-  Users
+  Users,
+  Folder,
+  FolderOpen,
+  X,
+  Search,
+  Settings,
+  Layers,
+  Package,
+  Download,
+  Trash2,
+  Edit3,
+  Plus,
+  ChevronRight,
+  ChevronLeft,
+  Maximize2,
+  Minimize2,
+  Terminal as TerminalIcon,
+  Box,
+  ShieldAlert,
+  CheckCircle2,
+  Info
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/Button";
 import { cn } from "@/lib/utils";
+import {
+  initialProjectFiles,
+  availablePackages,
+  availableModules,
+  fileIcons,
+  getFileIcon,
+  flattenFiles,
+  type FileNode,
+  type PackageDependency,
+  type InstalledModule,
+  type TerminalCommand
+} from "@/lib/playground/project";
 
-const availableModules = [
-  { id: "auth", name: "Authentication", description: "JWT, OAuth, MFA", icon: Key },
-  { id: "users", name: "Users", description: "User CRUD operations", icon: Users },
-  { id: "email", name: "Email", description: "SMTP email sending", icon: Mail },
-  { id: "cache", name: "Cache", description: "Redis caching", icon: Database },
-  { id: "queue", name: "Queue", description: "Background jobs", icon: HardDrive },
-  { id: "websocket", name: "WebSocket", description: "Real-time communication", icon: Radio },
+// Activity bar items
+const activityItems = [
+  { id: "explorer", icon: Files, label: "Explorer", shortcut: "Ctrl+Shift+E" },
+  { id: "search", icon: Search, label: "Search", shortcut: "Ctrl+Shift+F" },
+  { id: "modules", icon: Layers, label: "Modules", shortcut: "Ctrl+Shift+M" },
+  { id: "terminal", icon: TerminalIcon, label: "Terminal", shortcut: "Ctrl+`" },
 ];
 
-const templates = [
-  {
-    id: "hello",
-    name: "Hello World",
-    description: "Print a greeting message",
-    code: `// Hello World Example
-// Welcome to ServCraft Playground!
-
-console.log("=================================");
-console.log("Welcome to ServCraft Playground!");
-console.log("=================================");
-console.log("");
-console.log("Version: 0.4.9");
-console.log("Status: Running smoothly");
-console.log("");
-
-// Available modules: auth, users, email, cache, queue, websocket
-// Enable modules from the dropdown above
-
-console.log("Ready for coding! 🚀");
-
-// Try some JavaScript!
-const numbers = [1, 2, 3, 4, 5];
-const doubled = numbers.map(n => n * 2);
-console.log("Doubled numbers:", doubled);
-
-const sum = numbers.reduce((a, b) => a + b, 0);
-console.log("Sum:", sum);
-
-console.log("");
-console.log("Happy coding! 🎉");`,
-  },
-  {
-    id: "functions",
-    name: "Functions",
-    description: "Learn about functions",
-    code: `// Functions Example
-// Functions are reusable blocks of code
-
-// Basic function
-function greet(name) {
-  return \`Hello, \${name}! Welcome to ServCraft.\`;
+function Files({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5L7.5 3 12 7.5l4.5 4.5-4.5 4.5L7.5 21 3 16.5V7.5z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 12L7.5 16.5M12 12l4.5 4.5M12 12V7.5" />
+    </svg>
+  );
 }
 
-console.log(greet("Developer"));
+// Available packages
+const PACKAGES = availablePackages;
 
-// Arrow function
-const add = (a, b) => a + b;
-console.log(\`2 + 3 = \${add(2, 3)}\`);
-
-// Higher-order function
-const createMultiplier = (factor) => {
-  return (num) => num * factor;
-};
-
-const triple = createMultiplier(3);
-console.log(\`5 × 3 = \${triple(5)}\`);
-
-// Async function example
-async function fetchData() {
-  // Simulating an async operation
-  return new Promise(resolve => {
-    setTimeout(() => {
-      resolve({ id: 1, name: "Data fetched!" });
-    }, 100);
-  });
-}
-
-// Call the async function
-const data = await fetchData();
-console.log("Async result:", JSON.stringify(data));`,
-  },
-  {
-    id: "objects",
-    name: "Objects & Arrays",
-    description: "Working with data structures",
-    code: `// Objects and Arrays Example
-
-// Object with methods
-const user = {
-  name: "Alice",
-  email: "alice@example.com",
-  role: "ADMIN",
-
-  greet() {
-    return \`Hello, I'm \${this.name}\`;
-  },
-
-  getInfo() {
-    return {
-      name: this.name,
-      email: this.email,
-      role: this.role
-    };
-  }
-};
-
-console.log(user.greet());
-console.log("User info:", JSON.stringify(user.getInfo(), null, 2));
-
-// Array operations
-const products = [
-  { name: "Laptop", price: 999, category: "Electronics" },
-  { name: "Book", price: 15, category: "Education" },
-  { name: "Phone", price: 699, category: "Electronics" },
-  { name: "Desk", price: 299, category: "Furniture" }
-];
-
-// Filter, map, reduce
-const electronics = products.filter(p => p.category === "Electronics");
-console.log("Electronics:", electronics.map(p => p.name).join(", "));
-
-const totalPrice = products.reduce((sum, p) => sum + p.price, 0);
-console.log("Total price: $" + totalPrice);
-
-// Destructuring
-const { name, price } = products[0];
-console.log(\`First product: \${name} costs $\${price}\`);`,
-  },
-  {
-    id: "auth",
-    name: "Authentication",
-    description: "JWT token generation (requires auth module)",
-    code: `// Authentication Example with Auth Module
-// Enable 'auth' module to use these features
-
-console.log("=== Authentication Module Demo ===");
-console.log("");
-
-// Generate a JWT token
-const payload = {
-  userId: 123,
-  email: "user@example.com",
-  role: "ADMIN",
-  iat: Date.now()
-};
-
-const token = auth.generateToken(payload);
-console.log("Generated JWT Token:");
-console.log(token.substring(0, 50) + "...");
-
-console.log("");
-
-// Verify the token
-const verified = auth.verifyToken(token);
-if (verified.valid) {
-  console.log("Token is valid!");
-  console.log("Payload:", JSON.stringify(verified.payload, null, 2));
-} else {
-  console.log("Token verification failed:", verified.error);
-}
-
-console.log("");
-
-// Password hashing
-const password = "securePassword123";
-const hash = auth.hashPassword(password);
-console.log("Password hash:", hash);
-
-console.log("");
-console.log("Password verification:", auth.verifyPassword(password, hash));
-console.log("Wrong password verification:", auth.verifyPassword("wrongPassword", hash));`,
-  },
-  {
-    id: "users",
-    name: "Users CRUD",
-    description: "User database operations (requires users module)",
-    code: `// Users CRUD Example
-// Enable 'users' module to use these features
-
-console.log("=== Users Module Demo ===");
-console.log("");
-
-// List all users
-console.log("All users:");
-const allUsers = users.findAll();
-allUsers.forEach(u => {
-  console.log(\`  - \${u.name} (\${u.email}) - \${u.role}\`);
-});
-
-console.log("");
-
-// Find user by ID
-console.log("Find user by ID 1:");
-const user = users.findById(1);
-console.log(user);
-
-console.log("");
-
-// Create new user
-console.log("Creating new user...");
-const newUser = users.create({
-  name: "David",
-  email: "david@example.com",
-  role: "USER"
-});
-console.log("Created:", newUser);
-
-console.log("");
-
-// Update user
-console.log("Updating user 1...");
-const updated = users.update(1, { name: "Alice Smith" });
-console.log("Updated:", updated);
-
-console.log("");
-
-// Delete user
-console.log("Deleting user 3...");
-const deleted = users.delete(3);
-console.log("Deleted:", deleted);
-
-console.log("");
-
-// Final user list
-console.log("Final users:");
-users.findAll().forEach(u => {
-  console.log(\`  - \${u.name} (\${u.email}) - \${u.role}\`);
-});`,
-  },
-  {
-    id: "cache",
-    name: "Cache Operations",
-    description: "Redis-like cache (requires cache module)",
-    code: `// Cache Operations Example
-// Enable 'cache' module to use these features
-
-console.log("=== Cache Module Demo ===");
-console.log("");
-
-// Set values in cache
-console.log("Setting cache values...");
-cache.set("user:1", { name: "Alice", role: "ADMIN" }, 60);
-cache.set("user:2", { name: "Bob", role: "USER" }, 60);
-cache.set("counter", 42, 120);
-
-console.log("");
-
-// Get values
-console.log("Getting cache values...");
-const user1 = cache.get("user:1");
-console.log("user:1:", user1);
-
-const user2 = cache.get("user:2");
-console.log("user:2:", user2);
-
-const counter = cache.get("counter");
-console.log("counter:", counter);
-
-console.log("");
-
-// Non-existent key
-const missing = cache.get("missing");
-console.log("missing key:", missing);
-
-console.log("");
-
-// Delete key
-console.log("Deleting user:2...");
-const deleted = cache.del("user:2");
-console.log("Deleted:", deleted);
-
-console.log("");
-
-// Get stats
-console.log("Verifying deletion...");
-console.log("user:2 after delete:", cache.get("user:2"));`,
-  },
-];
-
-const defaultCode = templates[0].code;
+// Available modules
+const MODULES = availableModules;
 
 export default function PlaygroundPage() {
-  const [code, setCode] = useState(defaultCode);
-  const [selectedModules, setSelectedModules] = useState<string[]>([]);
-  const [output, setOutput] = useState<string>("");
-  const [isRunning, setIsRunning] = useState(false);
+  // State for project
+  const [files, setFiles] = useState<FileNode[]>(initialProjectFiles);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(["src", "src/routes"]));
+  const [selectedFile, setSelectedFile] = useState<FileNode | null>(null);
+  const [openTabs, setOpenTabs] = useState<FileNode[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+
+  // State for packages/modules
+  const [installedPackages, setInstalledPackages] = useState<PackageDependency[]>(
+    PACKAGES.map(p => ({ ...p, installed: p.name.includes('fastify') || p.name.includes('prisma') || p.name.includes('cors') }))
+  );
+  const [installedModules, setInstalledModules] = useState<InstalledModule[]>(
+    MODULES.map(m => ({ ...m, installed: false }))
+  );
+
+  // State for terminal
+  const [terminalCommands, setTerminalCommands] = useState<TerminalCommand[]>([
+    {
+      id: "1",
+      command: "",
+      output: ["Welcome to ServCraft Playground v0.4.9", "Type 'help' to see available commands."],
+      timestamp: new Date(),
+      type: "system"
+    }
+  ]);
+  const [terminalInput, setTerminalInput] = useState("");
+  const terminalRef = useRef<HTMLDivElement>(null);
+
+  // State for UI
+  const [activeActivity, setActiveActivity] = useState("explorer");
+  const [showPackages, setShowPackages] = useState(false);
   const [showModules, setShowModules] = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [stats, setStats] = useState({ executionTime: 0, memoryUsed: 0 });
-  const [error, setError] = useState<string | null>(null);
-  const [syntaxError, setSyntaxError] = useState<string | null>(null);
-  const outputRef = useRef<HTMLDivElement>(null);
-  const [activeTemplate, setActiveTemplate] = useState(templates[0].id);
+  const [isRunning, setIsRunning] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState(180);
+  const [isDraggingTerminal, setIsDraggingTerminal] = useState(false);
 
-  // Auto-scroll output
-  useEffect(() => {
-    if (outputRef.current) {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight;
-    }
-  }, [output]);
+  // Find file by path
+  const findFileByPath = useCallback((path: string): FileNode | null => {
+    const allFiles = flattenFiles(files);
+    return allFiles.find(f => {
+      const filePath = getFilePath(f, files);
+      return filePath === path;
+    }) || null;
+  }, [files]);
 
-  const toggleModule = (moduleId: string) => {
-    setSelectedModules((prev) =>
-      prev.includes(moduleId)
-        ? prev.filter((m) => m !== moduleId)
-        : [...prev, moduleId]
-    );
-  };
+  // Get file path
+  const getFilePath = (file: FileNode, allFiles: FileNode[]): string => {
+    const path: string[] = [file.name];
+    let current = file;
 
-  const loadTemplate = (template: typeof templates[0]) => {
-    setCode(template.code);
-    setSelectedModules([]);
-    setOutput("");
-    setError(null);
-    setSyntaxError(null);
-    setShowTemplates(false);
-    setActiveTemplate(template.id);
-  };
-
-  const runCode = async () => {
-    setIsRunning(true);
-    setError(null);
-    setSyntaxError(null);
-    setOutput("");
-    setStats({ executionTime: 0, memoryUsed: 0 });
-
-    const startTime = Date.now();
-
-    try {
-      const response = await fetch("/api/playground/execute", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code,
-          modules: selectedModules,
-          timeout: 5000,
-          maxMemory: 50,
-        }),
-      });
-
-      const result = await response.json();
-      const endTime = Date.now();
-
-      // Check for syntax errors first
-      if (result.syntaxError) {
-        setSyntaxError(result.syntaxError);
-        setIsRunning(false);
-        return;
+    const findParent = (nodes: FileNode[], target: FileNode): string[] => {
+      for (const node of nodes) {
+        if (node === target) return [node.name];
+        if (node.children) {
+          const childPath = findParent(node.children, target);
+          if (childPath.length > 0) {
+            return [node.name, ...childPath];
+          }
+        }
       }
-
-      if (result.success) {
-        setOutput(result.output || "Code executed successfully (no output)");
-        setStats({
-          executionTime: endTime - startTime,
-          memoryUsed: result.memoryUsed || 0,
-        });
-      } else {
-        setError(result.error || "Execution failed");
-        setOutput(result.output || "");
-      }
-    } catch (err) {
-      setError("Failed to connect to sandbox server");
-      setOutput("");
-    } finally {
-      setIsRunning(false);
-    }
-  };
-
-  const resetCode = () => {
-    setCode(defaultCode);
-    setSelectedModules([]);
-    setOutput("");
-    setError(null);
-    setSyntaxError(null);
-    setActiveTemplate(templates[0].id);
-  };
-
-  const copyOutput = async () => {
-    await navigator.clipboard.writeText(output);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // Keyboard shortcut
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        e.preventDefault();
-        runCode();
-      }
+      return [];
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [code, selectedModules]);
+    const parentPath = findParent(allFiles, file);
+    return parentPath.join("/");
+  };
+
+  // Toggle folder expansion
+  const toggleFolder = (path: string) => {
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
+  // Open file in editor
+  const openFile = (file: FileNode) => {
+    const path = getFilePath(file, files);
+    const existingTab = openTabs.find(tab => getFilePath(tab, files) === path);
+
+    if (existingTab) {
+      setActiveTabId(path);
+      setSelectedFile(existingTab);
+    } else {
+      const newTab = { ...file };
+      setOpenTabs(prev => [...prev, newTab]);
+      setActiveTabId(path);
+      setSelectedFile(newTab);
+    }
+  };
+
+  // Close tab
+  const closeTab = (e: React.MouseEvent, file: FileNode) => {
+    e.stopPropagation();
+    const path = getFilePath(file, files);
+    const tabIndex = openTabs.findIndex(tab => getFilePath(tab, files) === path);
+
+    const newTabs = openTabs.filter(tab => getFilePath(tab, files) !== path);
+
+    if (activeTabId === path) {
+      if (newTabs.length > 0) {
+        const newActiveIndex = tabIndex > 0 ? tabIndex - 1 : 0;
+        const newActive = newTabs[newActiveIndex];
+        setActiveTabId(getFilePath(newActive, files));
+        setSelectedFile(newActive);
+      } else {
+        setActiveTabId(null);
+        setSelectedFile(null);
+      }
+    }
+
+    setOpenTabs(newTabs);
+  };
+
+  // Update file content
+  const updateFileContent = (path: string, content: string) => {
+    setFiles(prev => {
+      const allFiles = flattenFiles(prev);
+      const targetFile = allFiles.find(f => getFilePath(f, prev) === path);
+      if (targetFile && targetFile.content !== undefined) {
+        targetFile.content = content;
+      }
+      return [...prev];
+    });
+
+    setOpenTabs(prev => prev.map(tab => {
+      if (getFilePath(tab, files) === path) {
+        return { ...tab, content };
+      }
+      return tab;
+    }));
+  };
+
+  // Terminal auto-scroll
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [terminalCommands]);
+
+  // Add terminal output
+  const addTerminalOutput = (output: string[], type: TerminalCommand['type'] = 'output', command = "") => {
+    setTerminalCommands(prev => [...prev, {
+      id: Date.now().toString(),
+      command,
+      output,
+      timestamp: new Date(),
+      type
+    }]);
+  };
+
+  // Execute terminal command
+  const executeCommand = async () => {
+    const cmd = terminalInput.trim();
+    if (!cmd) return;
+
+    setTerminalInput("");
+    addTerminalOutput([`$ ${cmd}`], 'command', cmd);
+
+    // Simulate command execution
+    const parts = cmd.split(" ");
+    const commandName = parts[0];
+    const args = parts.slice(1);
+
+    switch (commandName) {
+      case "help":
+        addTerminalOutput([
+          "Available commands:",
+          "  npm install [package]  - Install a package",
+          "  npm uninstall <package> - Remove a package",
+          "  servcraft add <module> - Add a ServCraft module",
+          "  servcraft remove <module> - Remove a module",
+          "  servcraft dev          - Start development server",
+          "  servcraft build        - Build the project",
+          "  servcraft db push      - Push database schema",
+          "  clear                  - Clear terminal",
+          "  help                   - Show this message",
+        ], 'system');
+        break;
+
+      case "clear":
+        setTerminalCommands([]);
+        break;
+
+      case "npm":
+        if (args[0] === "install" || args[0] === "i") {
+          const pkgName = args[1];
+          if (!pkgName) {
+            addTerminalOutput(["error: Missing package name"], 'error');
+            return;
+          }
+
+          setIsInstalling(true);
+          addTerminalOutput([`Installing ${pkgName}...`], 'output');
+
+          await new Promise(resolve => setTimeout(resolve, 1500));
+
+          const pkgIndex = installedPackages.findIndex(p =>
+            p.name === pkgName || p.name.endsWith("/" + pkgName)
+          );
+
+          if (pkgIndex >= 0) {
+            const newPackages = [...installedPackages];
+            newPackages[pkgIndex] = { ...newPackages[pkgIndex], installed: true };
+            setInstalledPackages(newPackages);
+
+            addTerminalOutput([
+              `added 1 package, and audited ${newPackages.filter(p => p.installed).length} packages`,
+              "",
+              `+ ${pkgName}@${installedPackages[pkgIndex].version}`
+            ], 'output');
+          } else {
+            addTerminalOutput([`npm ERR! 404 '${pkgName}' is not in the npm registry`], 'error');
+          }
+
+          setIsInstalling(false);
+        } else if (args[0] === "uninstall" || args[0] === "remove" || args[0] === "rm") {
+          const pkgName = args[1];
+          const pkgIndex = installedPackages.findIndex(p => p.name === pkgName);
+
+          if (pkgIndex >= 0 && installedPackages[pkgIndex].installed) {
+            const newPackages = [...installedPackages];
+            newPackages[pkgIndex] = { ...newPackages[pkgIndex], installed: false };
+            setInstalledPackages(newPackages);
+            addTerminalOutput([`removed 1 package`], 'output');
+          } else {
+            addTerminalOutput([`npm ERR! '${pkgName}' is not installed`], 'error');
+          }
+        } else {
+          addTerminalOutput([`npm: '${args[0]}' is not a recognized command`], 'error');
+        }
+        break;
+
+      case "servcraft":
+      case "sc":
+        if (args[0] === "add") {
+          const moduleName = args[1];
+          if (!moduleName) {
+            addTerminalOutput(["error: Missing module name"], 'error');
+            return;
+          }
+
+          setIsInstalling(true);
+          addTerminalOutput([`Adding ${moduleName} module...`], 'output');
+
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          const modIndex = installedModules.findIndex(m => m.name === moduleName);
+          if (modIndex >= 0) {
+            const newModules = [...installedModules];
+            newModules[modIndex] = { ...newModules[modIndex], installed: true };
+            setInstalledModules(newModules);
+
+            addTerminalOutput([
+              `✓ Module '${moduleName}' installed successfully`,
+              "",
+              `Dependencies added:`,
+              `  - @servcraft/${moduleName}@0.4.9`,
+            ], 'output');
+          } else {
+            addTerminalOutput([`error: Unknown module '${moduleName}'`], 'error');
+            addTerminalOutput(["Available modules: auth, users, email, cache, queue, websocket, oauth, mfa, search, logger"], 'output');
+          }
+
+          setIsInstalling(false);
+        } else if (args[0] === "remove" || args[0] === "rm") {
+          const moduleName = args[1];
+          const modIndex = installedModules.findIndex(m => m.name === moduleName);
+
+          if (modIndex >= 0 && installedModules[modIndex].installed) {
+            const newModules = [...installedModules];
+            newModules[modIndex] = { ...newModules[modIndex], installed: false };
+            setInstalledModules(newModules);
+            addTerminalOutput([`Removed module '${moduleName}'`], 'output');
+          } else {
+            addTerminalOutput([`error: Module '${moduleName}' is not installed`], 'error');
+          }
+        } else if (args[0] === "dev") {
+          addTerminalOutput([
+            "> my-servcraft-api@1.0.0 dev",
+            "> servcraft dev",
+            "",
+            "🔧 Starting development server...",
+            "✓ Server started on http://localhost:3000",
+            "✓ API ready at /api",
+            "✓ Database connected",
+          ], 'output');
+        } else if (args[0] === "build") {
+          addTerminalOutput([
+            "> my-servcraft-api@1.0.0 build",
+            "> servcraft build",
+            "",
+            "🔧 Building project...",
+            "✓ TypeScript compiled",
+            "✓ Routes generated",
+            "✓ Prisma client generated",
+            "✓ Build complete!",
+          ], 'output');
+        } else if (args[0] === "db" && args[1] === "push") {
+          addTerminalOutput([
+            "> servcraft db push",
+            "",
+            "🔧 Pushing database schema...",
+            "✓ Database schema synced",
+            "✓ 3 migrations applied",
+          ], 'output');
+        } else {
+          addTerminalOutput([`servcraft: '${args[0]}' is not a recognized command`], 'error');
+        }
+        break;
+
+      default:
+        addTerminalOutput([`command not found: ${commandName}`], 'error');
+    }
+  };
+
+  // Handle terminal keydown
+  const handleTerminalKeydown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      executeCommand();
+    }
+  };
+
+  // Install package
+  const installPackage = async (pkg: PackageDependency) => {
+    if (pkg.installed) return;
+
+    setIsInstalling(true);
+    addTerminalOutput([`$ npm install ${pkg.name}`], 'command');
+    addTerminalOutput([`Installing ${pkg.name}...`], 'output');
+
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    setInstalledPackages(prev => prev.map(p =>
+      p.name === pkg.name ? { ...p, installed: true } : p
+    ));
+
+    addTerminalOutput([
+      `added 1 package, and audited ${installedPackages.filter(p => p.installed).length + 1} packages`,
+      `+ ${pkg.name}@${pkg.version}`
+    ], 'output');
+
+    setIsInstalling(false);
+  };
+
+  // Install module
+  const installModule = async (mod: InstalledModule) => {
+    if (mod.installed) return;
+
+    setIsInstalling(true);
+    addTerminalOutput([`$ servcraft add ${mod.name}`], 'command');
+    addTerminalOutput([`Adding ${mod.name} module...`], 'output');
+
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    setInstalledModules(prev => prev.map(m =>
+      m.name === mod.name ? { ...m, installed: true } : m
+    ));
+
+    addTerminalOutput([
+      `✓ Module '${mod.name}' installed successfully`,
+      `Dependencies: @servcraft/${mod.name}@0.4.9`,
+    ], 'output');
+
+    setIsInstalling(false);
+  };
+
+  // Terminal drag handlers
+  const handleTerminalDragStart = () => setIsDraggingTerminal(true);
+  const handleTerminalDragEnd = () => setIsDraggingTerminal(false);
+  const handleTerminalDrag = (e: React.MouseEvent) => {
+    if (!isDraggingTerminal) return;
+    const newHeight = window.innerHeight - e.clientY;
+    if (newHeight > 100 && newHeight < 500) {
+      setTerminalHeight(newHeight);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Compact Header */}
-      <div className="border-b border-border bg-card/50 backdrop-blur-lg">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-          {/* Left Section */}
-          <div className="flex items-center gap-3">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                <Terminal className="w-4 h-4 text-white" />
-              </div>
-              <span className="font-semibold gradient-text">Playground</span>
-            </Link>
-            <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="px-1.5 py-0.5 rounded bg-secondary/50">Ctrl+Enter</span>
-              <span className="hidden md:inline">•</span>
-              <span className="hidden md:inline">5s timeout</span>
-              <span className="hidden md:inline">•</span>
-              <span className="hidden md:inline">50MB</span>
+    <div className="min-h-screen bg-[#1e1e2e] flex flex-col">
+      {/* Top Bar */}
+      <div className="h-10 bg-[#181825] border-b border-[#313244] flex items-center px-4 justify-between">
+        <div className="flex items-center gap-4">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+              <Terminal className="w-3.5 h-3.5 text-white" />
             </div>
+            <span className="text-sm font-semibold gradient-text">Playground</span>
+          </Link>
+          <div className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
+            <span className="px-1.5 py-0.5 rounded bg-[#313244]">Ctrl+Shift+E Explorer</span>
+            <span className="px-1.5 py-0.5 rounded bg-[#313244]">Ctrl+` Terminal</span>
           </div>
+        </div>
 
-          {/* Right Section - Controls */}
-          <div className="flex items-center gap-1">
-            {/* Templates Dropdown */}
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setShowTemplates(!showTemplates);
-                  setShowModules(false);
-                }}
-                className="gap-1 h-8 text-xs px-2 sm:px-3"
-              >
-                <FileCode className="w-3.5 h-3.5" />
-                <span className="hidden xs:inline">Templates</span>
-                <ChevronDown className={cn("w-3 h-3 transition-transform", showTemplates && "rotate-180")} />
-              </Button>
-
-              {showTemplates && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setShowTemplates(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-1 w-64 bg-card border border-border rounded-xl shadow-xl z-20 overflow-hidden">
-                    <div className="p-2 border-b border-border">
-                      <p className="text-xs font-medium text-muted-foreground px-2">Choose a template</p>
-                    </div>
-                    {templates.map((template) => (
-                      <button
-                        key={template.id}
-                        onClick={() => loadTemplate(template)}
-                        className={cn(
-                          "w-full text-left px-4 py-2.5 hover:bg-secondary/50 transition-colors",
-                          activeTemplate === template.id && "bg-primary/10 text-primary"
-                        )}
-                      >
-                        <div className="font-medium text-sm">{template.name}</div>
-                        <div className="text-xs text-muted-foreground">{template.description}</div>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Modules Dropdown */}
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setShowModules(!showModules);
-                  setShowTemplates(false);
-                }}
-                className="gap-1 h-8 text-xs px-2 sm:px-3"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span className="hidden xs:inline">Modules</span>
-                {selectedModules.length > 0 && (
-                  <span className="ml-0.5 px-1.5 py-0.5 text-xs bg-primary text-primary-foreground rounded-full">
-                    {selectedModules.length}
-                  </span>
-                )}
-                <ChevronDown className={cn("w-3 h-3 transition-transform", showModules && "rotate-180")} />
-              </Button>
-
-              {showModules && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setShowModules(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-1 w-72 bg-card border border-border rounded-xl shadow-xl z-20 overflow-hidden">
-                    <div className="p-2 border-b border-border">
-                      <p className="text-xs font-medium text-muted-foreground px-2">Select modules to enable</p>
-                    </div>
-                    {availableModules.map((module) => (
-                      <button
-                        key={module.id}
-                        onClick={() => toggleModule(module.id)}
-                        className="w-full text-left px-4 py-2 hover:bg-secondary/50 transition-colors flex items-center gap-3"
-                      >
-                        <div
-                          className={cn(
-                            "w-4 h-4 rounded border flex items-center justify-center transition-colors",
-                            selectedModules.includes(module.id)
-                              ? "bg-primary border-primary"
-                              : "border-border"
-                          )}
-                        >
-                          {selectedModules.includes(module.id) && (
-                            <Check className="w-2.5 h-2.5 text-primary-foreground" />
-                          )}
-                        </div>
-                        <module.icon className="w-4 h-4 text-muted-foreground" />
-                        <div>
-                          <div className="font-medium text-sm">{module.name}</div>
-                          <div className="text-xs text-muted-foreground">{module.description}</div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="h-5 w-px bg-border mx-1" />
-
-            {/* Run Button */}
-            <Button
-              onClick={runCode}
-              disabled={isRunning}
-              size="sm"
-              className="gap-1 h-8 px-3 sm:px-4"
-            >
-              {isRunning ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Play className="w-3.5 h-3.5" />
-              )}
-              <span className="hidden xs:inline font-medium">{isRunning ? "Running..." : "Run"}</span>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              addTerminalOutput([`$ servcraft dev`], 'command');
+              addTerminalOutput([
+                "> my-servcraft-api@1.0.0 dev",
+                "> servcraft dev",
+                "",
+                "🔧 Starting development server...",
+                "✓ Server started on http://localhost:3000",
+              ], 'output');
+            }}
+            className="gap-1 h-7 text-xs px-2 sm:px-3 bg-green-500/10 text-green-400 hover:bg-green-500/20"
+          >
+            <Play className="w-3 h-3" />
+            <span className="hidden xs:inline">Run</span>
+          </Button>
+          <Link href="/docs">
+            <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
+              <ExternalLink className="w-3 h-3" />
             </Button>
-          </div>
+          </Link>
         </div>
       </div>
 
-      {/* Main Content - Full height minus compact header */}
-      <div className="flex-1 max-w-7xl mx-auto w-full p-4">
-        <div className="grid lg:grid-cols-2 gap-4 h-[calc(100vh-10rem)] sm:h-[calc(100vh-8rem)]">
-          {/* Code Editor */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex flex-col"
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Activity Bar */}
+        <div className="w-10 bg-[#181825] border-r border-[#313244] flex flex-col items-center py-2 gap-1">
+          {activityItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveActivity(item.id)}
+              className={cn(
+                "w-8 h-8 rounded-lg flex items-center justify-center transition-colors",
+                activeActivity === item.id
+                  ? "bg-[#313244] text-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-[#313244]/50"
+              )}
+              title={item.label}
+            >
+              <item.icon className="w-4 h-4" />
+            </button>
+          ))}
+        </div>
+
+        {/* Sidebar / Activity Panel */}
+        <div className="w-64 bg-[#1e1e2e] border-r border-[#313244] flex flex-col overflow-hidden">
+          <AnimatePresence mode="wait">
+            {activeActivity === "explorer" && (
+              <motion.div
+                key="explorer"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="flex-1 flex flex-col"
+              >
+                <div className="p-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Explorer
+                </div>
+                <div className="flex-1 overflow-auto">
+                  {/* Project Files */}
+                  {files.map((file, idx) => (
+                    <FileTreeItem
+                      key={idx}
+                      file={file}
+                      files={files}
+                      level={0}
+                      expandedFolders={expandedFolders}
+                      selectedFile={selectedFile}
+                      onToggleFolder={toggleFolder}
+                      onSelectFile={openFile}
+                    />
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {activeActivity === "modules" && (
+              <motion.div
+                key="modules"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="flex-1 flex flex-col overflow-hidden"
+              >
+                <div className="p-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Modules
+                </div>
+                <div className="flex-1 overflow-auto p-2 space-y-2">
+                  {installedModules.map((mod) => (
+                    <ModuleItem
+                      key={mod.name}
+                      module={mod}
+                      onInstall={() => installModule(mod)}
+                      isInstalling={isInstalling}
+                    />
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {activeActivity === "search" && (
+              <motion.div
+                key="search"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="flex-1 flex flex-col"
+              >
+                <div className="p-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Search
+                </div>
+                <div className="px-2">
+                  <input
+                    type="text"
+                    placeholder="Search in files..."
+                    className="w-full bg-[#313244] border-none rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                  />
+                </div>
+              </motion.div>
+            )}
+
+            {activeActivity === "terminal" && (
+              <motion.div
+                key="terminal"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="flex-1 flex flex-col"
+              >
+                <div className="p-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Terminal
+                </div>
+                <div className="flex-1 px-2 overflow-auto font-mono text-xs">
+                  <div
+                    ref={terminalRef}
+                    className="space-y-1"
+                  >
+                    {terminalCommands.map((cmd) => (
+                      <div key={cmd.id}>
+                        {cmd.type === 'command' && (
+                          <div className="text-green-400">
+                            <span className="text-blue-400">$</span> {cmd.command}
+                          </div>
+                        )}
+                        {cmd.type === 'output' && (
+                          <div className="text-foreground pl-4 whitespace-pre-wrap">{cmd.output.join('\n')}</div>
+                        )}
+                        {cmd.type === 'error' && (
+                          <div className="text-red-400 pl-4">{cmd.output.join('\n')}</div>
+                        )}
+                        {cmd.type === 'system' && (
+                          <div className="text-muted-foreground pl-4">{cmd.output.join('\n')}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Packages Section */}
+          {(activeActivity === "explorer" || activeActivity === "modules") && (
+            <div className="border-t border-[#313244]">
+              <button
+                onClick={() => setShowPackages(!showPackages)}
+                className="w-full px-3 py-2 flex items-center justify-between text-xs hover:bg-[#313244]/50 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <Package className="w-3 h-3" />
+                  npm Packages
+                </span>
+                <ChevronDown className={cn("w-3 h-3 transition-transform", showPackages && "rotate-180")} />
+              </button>
+              <AnimatePresence>
+                {showPackages && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-2 pb-2 space-y-1">
+                      {installedPackages.map((pkg) => (
+                        <PackageItem
+                          key={pkg.name}
+                          pkg={pkg}
+                          onInstall={() => installPackage(pkg)}
+                          isInstalling={isInstalling}
+                        />
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+        </div>
+
+        {/* Editor Area */}
+        <div className="flex-1 flex flex-col bg-[#1e1e2e]">
+          {/* Tabs */}
+          {openTabs.length > 0 && (
+            <div className="flex items-center bg-[#181825] border-b border-[#313244] overflow-x-auto">
+              {openTabs.map((file) => {
+                const path = getFilePath(file, files);
+                const isActive = activeTabId === path;
+                const icon = getFileIcon(file.name || "");
+
+                return (
+                  <button
+                    key={path}
+                    onClick={() => {
+                      setActiveTabId(path);
+                      setSelectedFile(file);
+                    }}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-2 text-xs border-r border-[#313244] min-w-0 max-w-40",
+                      isActive
+                        ? "bg-[#1e1e2e] text-foreground border-t-2 border-t-primary"
+                        : "text-muted-foreground hover:bg-[#313244]/50"
+                    )}
+                  >
+                    <span>{icon}</span>
+                    <span className="truncate">{file.name}</span>
+                    <button
+                      onClick={(e) => closeTab(e, file)}
+                      className="ml-1 p-0.5 hover:bg-[#313244] rounded opacity-0 hover:opacity-100 group-hover:opacity-100"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Editor */}
+          <div className="flex-1 relative">
+            {selectedFile ? (
+              <div className="absolute inset-0 flex flex-col">
+                {/* Line numbers and code */}
+                <div className="flex-1 flex overflow-hidden">
+                  {/* Line numbers */}
+                  <div className="w-10 bg-[#181825] border-r border-[#313244] py-4 px-2 text-xs text-muted-foreground font-mono leading-6 select-none text-right">
+                    {selectedFile.content?.split('\n').map((_, i) => (
+                      <div key={i}>{i + 1}</div>
+                    ))}
+                  </div>
+
+                  {/* Code area */}
+                  <textarea
+                    value={selectedFile.content || ""}
+                    onChange={(e) => updateFileContent(getFilePath(selectedFile, files), e.target.value)}
+                    className="flex-1 bg-[#1e1e2e] p-4 font-mono text-sm text-foreground resize-none focus:outline-none leading-6"
+                    spellCheck={false}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <div className="text-center">
+                  <Code2 className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                  <p className="text-sm">Select a file to edit</p>
+                  <p className="text-xs mt-1 opacity-50">Or create a new file from the explorer</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Terminal Panel */}
+          <div
+            className="bg-[#181825] border-t border-[#313244] flex flex-col"
+            style={{ height: terminalHeight }}
           >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2 text-sm">
-                <Code2 className="w-4 h-4 text-primary" />
-                <span className="font-medium">Code</span>
-                {selectedModules.length > 0 && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs">
-                    <Sparkles className="w-3 h-3" />
-                    {selectedModules.join(", ")}
+            {/* Terminal header with drag handle */}
+            <div
+              className="flex items-center justify-between px-3 py-1 border-b border-[#313244] cursor-row-resize"
+              onMouseDown={handleTerminalDragStart}
+              onMouseUp={handleTerminalDragEnd}
+              onMouseLeave={handleTerminalDragEnd}
+              onMouseMove={handleTerminalDrag}
+            >
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <TerminalIcon className="w-3 h-3" />
+                Terminal
+                {isInstalling && (
+                  <span className="flex items-center gap-1 text-yellow-400">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Running...
                   </span>
                 )}
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={resetCode}
-                className="gap-1 h-7 text-xs"
-              >
-                <RotateCcw className="w-3 h-3" />
-                Reset
-              </Button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setTerminalHeight(prev => prev === 180 ? 300 : 180)}
+                  className="p-1 hover:bg-[#313244] rounded"
+                >
+                  {terminalHeight > 200 ? (
+                    <Minimize2 className="w-3 h-3" />
+                  ) : (
+                    <Maximize2 className="w-3 h-3" />
+                  )}
+                </button>
+              </div>
             </div>
-            <div className="flex-1 bg-[#0d0d14] border border-border rounded-xl overflow-hidden flex flex-col">
-              <div className="flex-1 relative">
-                {/* Line numbers */}
-                <div className="absolute left-0 top-0 bottom-0 w-10 bg-[#0a0a0f] border-r border-border/50 flex flex-col pt-4 px-2 text-xs text-muted-foreground font-mono leading-6 select-none">
-                  {code.split("\n").map((_, i) => (
-                    <div key={i} className="text-right">{i + 1}</div>
-                  ))}
+
+            {/* Terminal content */}
+            <div
+              ref={terminalRef}
+              className="flex-1 overflow-auto p-2 font-mono text-xs"
+            >
+              {terminalCommands.map((cmd) => (
+                <div key={cmd.id} className="mb-1">
+                  {cmd.type === 'command' && (
+                    <div className="text-green-400 flex items-center gap-2">
+                      <span className="text-blue-400">$</span>
+                      <span>{cmd.command}</span>
+                    </div>
+                  )}
+                  {cmd.type === 'output' && (
+                    <div className="text-foreground pl-4 whitespace-pre-wrap">{cmd.output.join('\n')}</div>
+                  )}
+                  {cmd.type === 'error' && (
+                    <div className="text-red-400 pl-4">{cmd.output.join('\n')}</div>
+                  )}
+                  {cmd.type === 'system' && (
+                    <div className="text-muted-foreground pl-4">{cmd.output.join('\n')}</div>
+                  )}
                 </div>
-                <textarea
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  className="w-full h-full pl-12 p-4 font-mono text-sm bg-transparent text-foreground resize-none focus:outline-none leading-6"
-                  spellCheck={false}
-                  placeholder="Write your code here..."
+              ))}
+
+              {/* Terminal input */}
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-blue-400">$</span>
+                <input
+                  type="text"
+                  value={terminalInput}
+                  onChange={(e) => setTerminalInput(e.target.value)}
+                  onKeyDown={handleTerminalKeydown}
+                  placeholder="Enter command..."
+                  className="flex-1 bg-transparent border-none focus:outline-none text-foreground"
+                  disabled={isInstalling}
                 />
               </div>
             </div>
-          </motion.div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-          {/* Output Terminal */}
+// File Tree Item Component
+function FileTreeItem({
+  file,
+  files,
+  level,
+  expandedFolders,
+  selectedFile,
+  onToggleFolder,
+  onSelectFile,
+}: {
+  file: FileNode;
+  files: FileNode[];
+  level: number;
+  expandedFolders: Set<string>;
+  selectedFile: FileNode | null;
+  onToggleFolder: (path: string) => void;
+  onSelectFile: (file: FileNode) => void;
+}) {
+  const [filePath, setFilePath] = useState<string>("");
+
+  useEffect(() => {
+    const findPath = (nodes: FileNode[], target: FileNode, currentPath = ""): string => {
+      for (const node of nodes) {
+        const newPath = currentPath ? `${currentPath}/${node.name}` : node.name;
+        if (node === target) return newPath;
+        if (node.children) {
+          const found = findPath(node.children, target, newPath);
+          if (found) return found;
+        }
+      }
+      return "";
+    };
+    setFilePath(findPath(files, file));
+  }, [file, files]);
+
+  const isExpanded = file.type === 'folder' && expandedFolders.has(filePath);
+  const isSelected = selectedFile === file;
+  const hasChildren = file.children && file.children.length > 0;
+  const icon = getFileIcon(file.name);
+
+  return (
+    <div>
+      <button
+        onClick={() => {
+          if (file.type === 'folder') {
+            onToggleFolder(filePath);
+          } else {
+            onSelectFile(file);
+          }
+        }}
+        className={cn(
+          "w-full flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#313244]/50 transition-colors text-left",
+          isSelected && "bg-[#313244] text-foreground",
+          file.type === 'folder' && "font-medium"
+        )}
+        style={{ paddingLeft: `${8 + level * 12}px` }}
+      >
+        {hasChildren && (
+          <ChevronRight
+            className={cn(
+              "w-3 h-3 text-muted-foreground transition-transform",
+              isExpanded && "rotate-90"
+            )}
+          />
+        )}
+        {!hasChildren && <span className="w-3 h-3" />}
+        <span>{icon}</span>
+        <span className="truncate">{file.name}</span>
+      </button>
+
+      {/* Children */}
+      <AnimatePresence>
+        {isExpanded && file.children && (
           <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex flex-col"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
           >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2 text-sm">
-                <Terminal className="w-4 h-4 text-primary" />
-                <span className="font-medium">Output</span>
-              </div>
-              {output && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={copyOutput}
-                  className="gap-1 h-7 text-xs"
-                >
-                  {copied ? (
-                    <Check className="w-3 h-3 text-green-400" />
-                  ) : (
-                    <Copy className="w-3 h-3" />
-                  )}
-                  {copied ? "Copied!" : "Copy"}
-                </Button>
-              )}
-            </div>
-
-            {/* Syntax Error Banner */}
-            {syntaxError && (
-              <div className="mb-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
-                <div className="flex items-center gap-2 text-red-400 mb-1">
-                  <AlertTriangle className="w-4 h-4" />
-                  <span className="font-medium text-sm">Syntax Error</span>
-                </div>
-                <pre className="text-sm text-red-300 whitespace-pre-wrap font-mono">{syntaxError}</pre>
-              </div>
-            )}
-
-            {/* Runtime Error Banner */}
-            {error && !syntaxError && (
-              <div className="mb-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
-                <div className="flex items-center gap-2 text-red-400 mb-1">
-                  <AlertTriangle className="w-4 h-4" />
-                  <span className="font-medium text-sm">Runtime Error</span>
-                </div>
-                <p className="text-sm text-red-300">{error}</p>
-              </div>
-            )}
-
-            {/* Output Panel */}
-            <div className="flex-1 bg-[#0d0d14] border border-border rounded-xl overflow-hidden flex flex-col">
-              {/* Stats Bar */}
-              <div className="flex items-center gap-4 px-4 py-2 border-b border-border bg-secondary/20 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-3 h-3" />
-                  <span>{stats.executionTime}ms</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Cpu className="w-3 h-3" />
-                  <span>{stats.memoryUsed}MB</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Shield className="w-3 h-3" />
-                  <span>Sandboxed</span>
-                </div>
-              </div>
-
-              {/* Output Content */}
-              <div
-                ref={outputRef}
-                className="flex-1 p-4 overflow-auto font-mono text-sm"
-              >
-                {output ? (
-                  <pre className="text-foreground whitespace-pre-wrap">{output}</pre>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    <div className="text-center">
-                      <Zap className="w-6 h-6 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">Click "Run" or press Ctrl+Enter to execute</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            {file.children.map((child, idx) => (
+              <FileTreeItem
+                key={idx}
+                file={child}
+                files={files}
+                level={level + 1}
+                expandedFolders={expandedFolders}
+                selectedFile={selectedFile}
+                onToggleFolder={onToggleFolder}
+                onSelectFile={onSelectFile}
+              />
+            ))}
           </motion.div>
-        </div>
-      </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
-      {/* Compact Footer */}
-      <div className="border-t border-border py-3 px-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-muted-foreground">
-          <div className="flex items-center gap-4">
-            <Link href="/docs" className="flex items-center gap-1 hover:text-foreground transition-colors">
-              <ExternalLink className="w-3 h-3" />
-              <span>View Documentation</span>
-            </Link>
-          </div>
-          <div className="flex items-center gap-2">
-            <span>Powered by ServCraft</span>
-          </div>
-        </div>
+// Package Item Component
+function PackageItem({
+  pkg,
+  onInstall,
+  isInstalling,
+}: {
+  pkg: PackageDependency;
+  onInstall: () => void;
+  isInstalling: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between py-1 px-2 rounded hover:bg-[#313244]/50 text-xs">
+      <div className="flex items-center gap-2 min-w-0">
+        <Package className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+        <span className="truncate">{pkg.name}</span>
+        <span className="text-muted-foreground text-[10px] flex-shrink-0">{pkg.version}</span>
       </div>
+      {pkg.installed ? (
+        <CheckCircle2 className="w-3 h-3 text-green-400 flex-shrink-0" />
+      ) : (
+        <button
+          onClick={onInstall}
+          disabled={isInstalling}
+          className="p-0.5 hover:bg-[#313244] rounded text-muted-foreground hover:text-foreground disabled:opacity-50"
+        >
+          <Download className="w-3 h-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Module Item Component
+function ModuleItem({
+  module,
+  onInstall,
+  isInstalling,
+}: {
+  module: InstalledModule;
+  onInstall: () => void;
+  isInstalling: boolean;
+}) {
+  return (
+    <div className={cn(
+      "p-2 rounded border transition-colors",
+      module.installed
+        ? "bg-green-500/5 border-green-500/20"
+        : "bg-[#313244]/20 border-[#313244] hover:border-primary/50"
+    )}>
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2">
+          <Layers className={cn("w-4 h-4", module.installed ? "text-green-400" : "text-primary")} />
+          <span className="font-medium text-sm">{module.name}</span>
+        </div>
+        {module.installed ? (
+          <span className="text-xs text-green-400 flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3" />
+            Installed
+          </span>
+        ) : (
+          <button
+            onClick={onInstall}
+            disabled={isInstalling}
+            className="flex items-center gap-1 px-2 py-0.5 bg-primary text-primary-foreground rounded text-xs hover:bg-primary/90 disabled:opacity-50"
+          >
+            <Download className="w-3 h-3" />
+            Install
+          </button>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {module.name === 'auth' && "JWT authentication, OAuth, MFA support"}
+        {module.name === 'users' && "Complete user CRUD with roles & permissions"}
+        {module.name === 'email' && "SMTP email sending with templates"}
+        {module.name === 'cache' && "Redis caching with TTL support"}
+        {module.name === 'queue' && "BullMQ background job processing"}
+        {module.name === 'websocket' && "Real-time Socket.io communication"}
+        {module.name === 'oauth' && "Social login (Google, GitHub, etc.)"}
+        {module.name === 'mfa' && "Two-factor authentication (TOTP)"}
+        {module.name === 'search' && "Elasticsearch integration"}
+        {module.name === 'logger' && "Structured logging with Pino"}
+      </p>
     </div>
   );
 }
