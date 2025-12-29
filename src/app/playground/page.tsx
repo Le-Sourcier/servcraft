@@ -716,12 +716,15 @@ export default function PlaygroundPage() {
                   >
                     <span>{icon}</span>
                     <span className="truncate">{file.name}</span>
-                    <button
-                      onClick={(e) => closeTab(e, file)}
-                      className="ml-1 p-0.5 hover:bg-[#313244] rounded opacity-0 hover:opacity-100 group-hover:opacity-100"
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeTab(e, file);
+                      }}
+                      className="ml-1 p-0.5 hover:bg-[#313244] rounded opacity-0 hover:opacity-100 cursor-pointer"
                     >
                       <X className="w-3 h-3" />
-                    </button>
+                    </span>
                   </button>
                 );
               })}
