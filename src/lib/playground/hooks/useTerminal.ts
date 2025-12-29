@@ -1,0 +1,289 @@
+import { useState, useCallback, useRef, useEffect } from 'react';
+import type { TerminalCommand, PackageDependency, InstalledModule, FileNode } from '../project';
+
+interface UseTerminalProps {
+  installedPackages: PackageDependency[];
+  setInstalledPackages: React.Dispatch<React.SetStateAction<PackageDependency[]>>;
+  installedModules: InstalledModule[];
+  setInstalledModules: React.Dispatch<React.SetStateAction<InstalledModule[]>>;
+  setFiles: React.Dispatch<React.SetStateAction<FileNode[]>>;
+}
+
+export function useTerminal({
+  installedPackages,
+  setInstalledPackages,
+  installedModules,
+  setInstalledModules,
+  setFiles,
+}: UseTerminalProps) {
+  const [terminalCommands, setTerminalCommands] = useState<TerminalCommand[]>([
+    {
+      id: "init-0",
+      command: "",
+      output: ["Welcome to ServCraft Playground v0.4.9", "Type 'help' to see available commands."],
+      timestamp: new Date(),
+      type: "system"
+    }
+  ]);
+  const [terminalInput, setTerminalInput] = useState("");
+  const [terminalIdCounter, setTerminalIdCounter] = useState(1);
+  const [isInstalling, setIsInstalling] = useState(false);
+  const terminalRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll terminal
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [terminalCommands]);
+
+  // Add terminal output
+  const addTerminalOutput = useCallback((output: string[], type: TerminalCommand['type'] = 'output', command = "") => {
+    setTerminalIdCounter(prev => {
+      const newId = prev;
+      setTerminalCommands(cmds => [...cmds, {
+        id: `cmd-${newId}`,
+        command,
+        output,
+        timestamp: new Date(),
+        type
+      }]);
+      return prev + 1;
+    });
+  }, []);
+
+  // Execute terminal command
+  const executeCommand = useCallback(async () => {
+    const cmd = terminalInput.trim();
+    if (!cmd) return;
+
+    setTerminalInput("");
+    addTerminalOutput([`$ ${cmd}`], 'command', cmd);
+
+    const parts = cmd.split(" ");
+    const commandName = parts[0];
+    const args = parts.slice(1);
+
+    switch (commandName) {
+      case "help":
+        addTerminalOutput([
+          "Available commands:",
+          "  npm install [package]  - Install a package",
+          "  npm uninstall <package> - Remove a package",
+          "  servcraft add <module> - Add a ServCraft module",
+          "  servcraft remove <module> - Remove a module",
+          "  servcraft dev          - Start development server",
+          "  servcraft build        - Build the project",
+          "  servcraft db push      - Push database schema",
+          "  clear                  - Clear terminal",
+          "  help                   - Show this message",
+        ], 'system');
+        break;
+
+      case "clear":
+        setTerminalIdCounter(prev => {
+          setTerminalCommands([{
+            id: `init-${prev}`,
+            command: "",
+            output: ["Terminal cleared. Type 'help' for commands."],
+            timestamp: new Date(),
+            type: "system"
+          }]);
+          return prev + 1;
+        });
+        break;
+
+      case "npm":
+        if (args[0] === "install" || args[0] === "i") {
+          const pkgName = args[1];
+          if (!pkgName) {
+            addTerminalOutput(["error: Missing package name"], 'error');
+            return;
+          }
+
+          setIsInstalling(true);
+          addTerminalOutput([`Installing ${pkgName}...`], 'output');
+          await new Promise(resolve => setTimeout(resolve, 1500));
+
+          const pkgIndex = installedPackages.findIndex(p =>
+            p.name === pkgName || p.name.endsWith("/" + pkgName)
+          );
+
+          if (pkgIndex >= 0) {
+            const newPackages = [...installedPackages];
+            newPackages[pkgIndex] = { ...newPackages[pkgIndex], installed: true };
+            setInstalledPackages(newPackages);
+
+            addTerminalOutput([
+              `added 1 package, and audited ${newPackages.filter(p => p.installed).length} packages`,
+              "",
+              `+ ${pkgName}@${installedPackages[pkgIndex].version}`
+            ], 'output');
+          } else {
+            addTerminalOutput([`npm ERR! 404 '${pkgName}' is not in the npm registry`], 'error');
+          }
+
+          setIsInstalling(false);
+        } else if (args[0] === "uninstall" || args[0] === "remove" || args[0] === "rm") {
+          const pkgName = args[1];
+          const pkgIndex = installedPackages.findIndex(p => p.name === pkgName);
+
+          if (pkgIndex >= 0 && installedPackages[pkgIndex].installed) {
+            const newPackages = [...installedPackages];
+            newPackages[pkgIndex] = { ...newPackages[pkgIndex], installed: false };
+            setInstalledPackages(newPackages);
+            addTerminalOutput([`removed 1 package`], 'output');
+          } else {
+            addTerminalOutput([`npm ERR! '${pkgName}' is not installed`], 'error');
+          }
+        } else {
+          addTerminalOutput([`npm: '${args[0]}' is not a recognized command`], 'error');
+        }
+        break;
+
+      case "servcraft":
+      case "sc":
+        if (args[0] === "add") {
+          const moduleName = args[1];
+          if (!moduleName) {
+            addTerminalOutput(["error: Missing module name"], 'error');
+            return;
+          }
+
+          setIsInstalling(true);
+          addTerminalOutput([`Adding ${moduleName} module...`], 'output');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          const modIndex = installedModules.findIndex(m => m.name === moduleName);
+          if (modIndex >= 0) {
+            const newModules = [...installedModules];
+            newModules[modIndex] = { ...newModules[modIndex], installed: true };
+            setInstalledModules(newModules);
+
+            // Create module folder and files
+            setFiles(prev => {
+              const moduleFolder = prev.find(f => f.name === 'src');
+              if (moduleFolder?.children) {
+                const modulesFolder = moduleFolder.children.find(f => f.name === 'modules');
+                if (modulesFolder && !modulesFolder.children?.find(f => f.name === moduleName)) {
+                  modulesFolder.children = modulesFolder.children || [];
+                  modulesFolder.children.push({
+                    name: moduleName,
+                    type: 'folder',
+                    children: [
+                      {
+                        name: 'index.ts',
+                        type: 'file',
+                        language: 'typescript',
+                        content: `// ${moduleName} module
+export * from './${moduleName}.controller';
+export * from './${moduleName}.service';
+`,
+                      },
+                      {
+                        name: `${moduleName}.controller.ts`,
+                        type: 'file',
+                        language: 'typescript',
+                        content: `import { FastifyPluginAsync } from 'fastify';
+
+const ${moduleName}Controller: FastifyPluginAsync = async (fastify) => {
+  // ${moduleName} routes
+  fastify.get('/', async () => {
+    return { module: '${moduleName}', status: 'active' };
+  });
+};
+
+export default ${moduleName}Controller;
+`,
+                      },
+                    ],
+                  });
+                }
+              }
+              return [...prev];
+            });
+
+            addTerminalOutput([
+              `✓ Module '${moduleName}' installed successfully`,
+              ``,
+              `Files created:`,
+              `  src/modules/${moduleName}/index.ts`,
+              `  src/modules/${moduleName}/${moduleName}.controller.ts`,
+              ``,
+              `Dependencies: @servcraft/${moduleName}@0.4.9`,
+            ], 'output');
+          } else {
+            addTerminalOutput([`error: Unknown module '${moduleName}'`], 'error');
+            addTerminalOutput(["Available modules: auth, users, email, cache, queue, websocket, oauth, mfa, search, logger"], 'output');
+          }
+
+          setIsInstalling(false);
+        } else if (args[0] === "remove" || args[0] === "rm") {
+          const moduleName = args[1];
+          const modIndex = installedModules.findIndex(m => m.name === moduleName);
+
+          if (modIndex >= 0 && installedModules[modIndex].installed) {
+            const newModules = [...installedModules];
+            newModules[modIndex] = { ...newModules[modIndex], installed: false };
+            setInstalledModules(newModules);
+            addTerminalOutput([`Removed module '${moduleName}'`], 'output');
+          } else {
+            addTerminalOutput([`error: Module '${moduleName}' is not installed`], 'error');
+          }
+        } else if (args[0] === "dev") {
+          addTerminalOutput([
+            "> my-servcraft-api@1.0.0 dev",
+            "> servcraft dev",
+            "",
+            "🔧 Starting development server...",
+            "✓ Server started on http://localhost:3000",
+            "✓ API ready at /api",
+            "✓ Database connected",
+          ], 'output');
+        } else if (args[0] === "build") {
+          addTerminalOutput([
+            "> my-servcraft-api@1.0.0 build",
+            "> servcraft build",
+            "",
+            "🔧 Building project...",
+            "✓ TypeScript compiled",
+            "✓ Routes generated",
+            "✓ Prisma client generated",
+            "✓ Build complete!",
+          ], 'output');
+        } else if (args[0] === "db" && args[1] === "push") {
+          addTerminalOutput([
+            "> servcraft db push",
+            "",
+            "🔧 Pushing database schema...",
+            "✓ Database schema synced",
+            "✓ 3 migrations applied",
+          ], 'output');
+        } else {
+          addTerminalOutput([`servcraft: '${args[0]}' is not a recognized command`], 'error');
+        }
+        break;
+
+      default:
+        addTerminalOutput([`command not found: ${commandName}`], 'error');
+    }
+  }, [terminalInput, installedPackages, installedModules, setInstalledPackages, setInstalledModules, setFiles, addTerminalOutput]);
+
+  // Handle terminal keydown
+  const handleTerminalKeydown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      executeCommand();
+    }
+  }, [executeCommand]);
+
+  return {
+    terminalCommands,
+    terminalInput,
+    setTerminalInput,
+    isInstalling,
+    terminalRef,
+    addTerminalOutput,
+    executeCommand,
+    handleTerminalKeydown,
+  };
+}
