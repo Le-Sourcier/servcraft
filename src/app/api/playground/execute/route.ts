@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { executeInSandbox, getSandboxStats, sanitizeCode } from "@/lib/sandbox";
+import { executeInSandbox, sanitizeCode } from "@/lib/sandbox";
 
 // Rate limiting simple (en production, utiliser Redis)
 const rateLimit = new Map<string, { count: number; resetTime: number }>();
@@ -106,9 +106,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   // Retourner les statistiques du sandbox
-  const stats = getSandboxStats();
   return NextResponse.json({
-    ...stats,
     rateLimit: RATE_LIMIT,
     status: "healthy",
   });

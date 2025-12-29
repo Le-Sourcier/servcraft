@@ -17,19 +17,26 @@ import {
   ChevronDown,
   Code2,
   Zap,
-  ExternalLink
+  ExternalLink,
+  FileCode,
+  Database,
+  Key,
+  Mail,
+  HardDrive,
+  Radio,
+  Users
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/Button";
 import { cn } from "@/lib/utils";
 
 const availableModules = [
-  { id: "auth", name: "Authentication", description: "JWT, OAuth, MFA" },
-  { id: "users", name: "Users", description: "User CRUD operations" },
-  { id: "email", name: "Email", description: "SMTP email sending" },
-  { id: "cache", name: "Cache", description: "Redis caching" },
-  { id: "queue", name: "Queue", description: "Background jobs" },
-  { id: "websocket", name: "WebSocket", description: "Real-time communication" },
+  { id: "auth", name: "Authentication", description: "JWT, OAuth, MFA", icon: Key },
+  { id: "users", name: "Users", description: "User CRUD operations", icon: Users },
+  { id: "email", name: "Email", description: "SMTP email sending", icon: Mail },
+  { id: "cache", name: "Cache", description: "Redis caching", icon: Database },
+  { id: "queue", name: "Queue", description: "Background jobs", icon: HardDrive },
+  { id: "websocket", name: "WebSocket", description: "Real-time communication", icon: Radio },
 ];
 
 const templates = [
@@ -38,7 +45,7 @@ const templates = [
     name: "Hello World",
     description: "Print a greeting message",
     code: `// Hello World Example
-// This is your first ServCraft program!
+// Welcome to ServCraft Playground!
 
 console.log("=================================");
 console.log("Welcome to ServCraft Playground!");
@@ -48,132 +55,257 @@ console.log("Version: 0.4.9");
 console.log("Status: Running smoothly");
 console.log("");
 
-// Try adding modules to unlock more features
-// Available: auth, users, email, cache, queue, websocket
+// Available modules: auth, users, email, cache, queue, websocket
+// Enable modules from the dropdown above
 
-console.log("Ready for coding! 🚀");`,
+console.log("Ready for coding! 🚀");
+
+// Try some JavaScript!
+const numbers = [1, 2, 3, 4, 5];
+const doubled = numbers.map(n => n * 2);
+console.log("Doubled numbers:", doubled);
+
+const sum = numbers.reduce((a, b) => a + b, 0);
+console.log("Sum:", sum);
+
+console.log("");
+console.log("Happy coding! 🎉");`,
   },
   {
-    id: "api",
-    name: "Simple API",
-    description: "Basic API endpoint structure",
-    code: `// Simple API Endpoint Example
-// Define a basic API route
+    id: "functions",
+    name: "Functions",
+    description: "Learn about functions",
+    code: `// Functions Example
+// Functions are reusable blocks of code
 
-console.log("Setting up API endpoints...");
-console.log("");
+// Basic function
+function greet(name) {
+  return \`Hello, \${name}! Welcome to ServCraft.\`;
+}
 
-// Simulated route definitions
-const routes = [
-  { method: "GET", path: "/api/health", handler: () => "OK" },
-  { method: "GET", path: "/api/users", handler: () => "[]" },
-  { method: "POST", path: "/api/users", handler: () => "Created" },
+console.log(greet("Developer"));
+
+// Arrow function
+const add = (a, b) => a + b;
+console.log(\`2 + 3 = \${add(2, 3)}\`);
+
+// Higher-order function
+const createMultiplier = (factor) => {
+  return (num) => num * factor;
+};
+
+const triple = createMultiplier(3);
+console.log(\`5 × 3 = \${triple(5)}\`);
+
+// Async function example
+async function fetchData() {
+  // Simulating an async operation
+  return new Promise(resolve => {
+    setTimeout(() => {
+      resolve({ id: 1, name: "Data fetched!" });
+    }, 100);
+  });
+}
+
+// Call the async function
+const data = await fetchData();
+console.log("Async result:", JSON.stringify(data));`,
+  },
+  {
+    id: "objects",
+    name: "Objects & Arrays",
+    description: "Working with data structures",
+    code: `// Objects and Arrays Example
+
+// Object with methods
+const user = {
+  name: "Alice",
+  email: "alice@example.com",
+  role: "ADMIN",
+
+  greet() {
+    return \`Hello, I'm \${this.name}\`;
+  },
+
+  getInfo() {
+    return {
+      name: this.name,
+      email: this.email,
+      role: this.role
+    };
+  }
+};
+
+console.log(user.greet());
+console.log("User info:", JSON.stringify(user.getInfo(), null, 2));
+
+// Array operations
+const products = [
+  { name: "Laptop", price: 999, category: "Electronics" },
+  { name: "Book", price: 15, category: "Education" },
+  { name: "Phone", price: 699, category: "Electronics" },
+  { name: "Desk", price: 299, category: "Furniture" }
 ];
 
-routes.forEach(route => {
-  console.log(\`[\${route.method}] \${route.path} -> \${route.handler()}\`);
-});
+// Filter, map, reduce
+const electronics = products.filter(p => p.category === "Electronics");
+console.log("Electronics:", electronics.map(p => p.name).join(", "));
 
-console.log("");
-console.log("API Server initialized on port 3000");
-console.log("Listening for requests...");`,
+const totalPrice = products.reduce((sum, p) => sum + p.price, 0);
+console.log("Total price: $" + totalPrice);
+
+// Destructuring
+const { name, price } = products[0];
+console.log(\`First product: \${name} costs $\${price}\`);`,
   },
   {
     id: "auth",
     name: "Authentication",
-    description: "User login simulation (requires auth module)",
-    code: `// Authentication Example
-// Requires: auth module
+    description: "JWT token generation (requires auth module)",
+    code: `// Authentication Example with Auth Module
+// Enable 'auth' module to use these features
 
-console.log("Auth Service initialized");
+console.log("=== Authentication Module Demo ===");
 console.log("");
 
-// Simulate user authentication
-const users = [
-  { id: 1, email: "admin@example.com", role: "ADMIN" },
-  { id: 2, email: "user@example.com", role: "USER" },
-];
-
-// Login simulation
-function login(email, password) {
-  console.log(\`Attempting login for: \${email}\`);
-
-  // Simulate password check
-  if (password.length < 4) {
-    console.log("Error: Password too short");
-    return null;
-  }
-
-  const user = users.find(u => u.email === email);
-  if (user) {
-    console.log(\`Success! Logged in as \${user.role}\`);
-    return {
-      user,
-      accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-      refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-    };
-  }
-
-  console.log("Error: User not found");
-  return null;
-}
-
-// Test login
-login("admin@example.com", "password123");
-login("unknown@example.com", "pass");
-
-console.log("");
-console.log("Authentication flow complete");`,
-  },
-  {
-    id: "database",
-    name: "Database",
-    description: "Database operations (requires users module)",
-    code: `// Database Operations Example
-// Requires: users module + database connection
-
-console.log("Initializing database connection...");
-console.log("Connected to: postgresql://localhost:5432/servcraft");
-console.log("");
-
-// Simulate Prisma operations
-const db = {
-  users: {
-    findMany: async () => [
-      { id: 1, name: "Alice", email: "alice@example.com" },
-      { id: 2, name: "Bob", email: "bob@example.com" },
-    ],
-    create: async (data) => ({ id: 3, ...data }),
-    update: async (where, data) => ({ ...where, ...data }),
-    delete: async (where) => ({ ...where }),
-  }
+// Generate a JWT token
+const payload = {
+  userId: 123,
+  email: "user@example.com",
+  role: "ADMIN",
+  iat: Date.now()
 };
 
-async function queryUsers() {
-  console.log("Fetching all users...");
-  const users = await db.users.findMany();
-  console.log(\`Found \${users.length} users:\`);
-  users.forEach(u => console.log(\`  - \${u.name} (\${u.email})\`));
-}
-
-async function createUser() {
-  console.log("Creating new user...");
-  const user = await db.users.create({
-    name: "Charlie",
-    email: "charlie@example.com",
-  });
-  console.log(\`Created: \${JSON.stringify(user)}\`);
-}
-
-async function runQueries() {
-  await queryUsers();
-  await createUser();
-}
-
-runQueries();
+const token = auth.generateToken(payload);
+console.log("Generated JWT Token:");
+console.log(token.substring(0, 50) + "...");
 
 console.log("");
-console.log("Database operations completed");`,
+
+// Verify the token
+const verified = auth.verifyToken(token);
+if (verified.valid) {
+  console.log("Token is valid!");
+  console.log("Payload:", JSON.stringify(verified.payload, null, 2));
+} else {
+  console.log("Token verification failed:", verified.error);
+}
+
+console.log("");
+
+// Password hashing
+const password = "securePassword123";
+const hash = auth.hashPassword(password);
+console.log("Password hash:", hash);
+
+console.log("");
+console.log("Password verification:", auth.verifyPassword(password, hash));
+console.log("Wrong password verification:", auth.verifyPassword("wrongPassword", hash));`,
+  },
+  {
+    id: "users",
+    name: "Users CRUD",
+    description: "User database operations (requires users module)",
+    code: `// Users CRUD Example
+// Enable 'users' module to use these features
+
+console.log("=== Users Module Demo ===");
+console.log("");
+
+// List all users
+console.log("All users:");
+const allUsers = users.findAll();
+allUsers.forEach(u => {
+  console.log(\`  - \${u.name} (\${u.email}) - \${u.role}\`);
+});
+
+console.log("");
+
+// Find user by ID
+console.log("Find user by ID 1:");
+const user = users.findById(1);
+console.log(user);
+
+console.log("");
+
+// Create new user
+console.log("Creating new user...");
+const newUser = users.create({
+  name: "David",
+  email: "david@example.com",
+  role: "USER"
+});
+console.log("Created:", newUser);
+
+console.log("");
+
+// Update user
+console.log("Updating user 1...");
+const updated = users.update(1, { name: "Alice Smith" });
+console.log("Updated:", updated);
+
+console.log("");
+
+// Delete user
+console.log("Deleting user 3...");
+const deleted = users.delete(3);
+console.log("Deleted:", deleted);
+
+console.log("");
+
+// Final user list
+console.log("Final users:");
+users.findAll().forEach(u => {
+  console.log(\`  - \${u.name} (\${u.email}) - \${u.role}\`);
+});`,
+  },
+  {
+    id: "cache",
+    name: "Cache Operations",
+    description: "Redis-like cache (requires cache module)",
+    code: `// Cache Operations Example
+// Enable 'cache' module to use these features
+
+console.log("=== Cache Module Demo ===");
+console.log("");
+
+// Set values in cache
+console.log("Setting cache values...");
+cache.set("user:1", { name: "Alice", role: "ADMIN" }, 60);
+cache.set("user:2", { name: "Bob", role: "USER" }, 60);
+cache.set("counter", 42, 120);
+
+console.log("");
+
+// Get values
+console.log("Getting cache values...");
+const user1 = cache.get("user:1");
+console.log("user:1:", user1);
+
+const user2 = cache.get("user:2");
+console.log("user:2:", user2);
+
+const counter = cache.get("counter");
+console.log("counter:", counter);
+
+console.log("");
+
+// Non-existent key
+const missing = cache.get("missing");
+console.log("missing key:", missing);
+
+console.log("");
+
+// Delete key
+console.log("Deleting user:2...");
+const deleted = cache.del("user:2");
+console.log("Deleted:", deleted);
+
+console.log("");
+
+// Get stats
+console.log("Verifying deletion...");
+console.log("user:2 after delete:", cache.get("user:2"));`,
   },
 ];
 
@@ -189,7 +321,9 @@ export default function PlaygroundPage() {
   const [copied, setCopied] = useState(false);
   const [stats, setStats] = useState({ executionTime: 0, memoryUsed: 0 });
   const [error, setError] = useState<string | null>(null);
+  const [syntaxError, setSyntaxError] = useState<string | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
+  const [activeTemplate, setActiveTemplate] = useState(templates[0].id);
 
   // Auto-scroll output
   useEffect(() => {
@@ -211,12 +345,15 @@ export default function PlaygroundPage() {
     setSelectedModules([]);
     setOutput("");
     setError(null);
+    setSyntaxError(null);
     setShowTemplates(false);
+    setActiveTemplate(template.id);
   };
 
   const runCode = async () => {
     setIsRunning(true);
     setError(null);
+    setSyntaxError(null);
     setOutput("");
     setStats({ executionTime: 0, memoryUsed: 0 });
 
@@ -236,6 +373,13 @@ export default function PlaygroundPage() {
 
       const result = await response.json();
       const endTime = Date.now();
+
+      // Check for syntax errors first
+      if (result.syntaxError) {
+        setSyntaxError(result.syntaxError);
+        setIsRunning(false);
+        return;
+      }
 
       if (result.success) {
         setOutput(result.output || "Code executed successfully (no output)");
@@ -260,6 +404,8 @@ export default function PlaygroundPage() {
     setSelectedModules([]);
     setOutput("");
     setError(null);
+    setSyntaxError(null);
+    setActiveTemplate(templates[0].id);
   };
 
   const copyOutput = async () => {
@@ -267,6 +413,19 @@ export default function PlaygroundPage() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  // Keyboard shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        runCode();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [code, selectedModules]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -280,13 +439,12 @@ export default function PlaygroundPage() {
               </div>
               <span className="font-semibold gradient-text">Playground</span>
             </Link>
-            <div className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
+            <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground">
+              <span className="px-1.5 py-0.5 rounded bg-secondary/50">Ctrl+Enter to run</span>
               <span>•</span>
               <span>5s timeout</span>
               <span>•</span>
               <span>50MB limit</span>
-              <span>•</span>
-              <span>Sandboxed</span>
             </div>
           </div>
 
@@ -302,7 +460,7 @@ export default function PlaygroundPage() {
                 }}
                 className="gap-1 h-8 text-xs"
               >
-                <Code2 className="w-3 h-3" />
+                <FileCode className="w-3 h-3" />
                 <span className="hidden sm:inline">Templates</span>
                 <ChevronDown className={cn("w-3 h-3 transition-transform", showTemplates && "rotate-180")} />
               </Button>
@@ -321,7 +479,10 @@ export default function PlaygroundPage() {
                       <button
                         key={template.id}
                         onClick={() => loadTemplate(template)}
-                        className="w-full text-left px-4 py-2.5 hover:bg-secondary/50 transition-colors"
+                        className={cn(
+                          "w-full text-left px-4 py-2.5 hover:bg-secondary/50 transition-colors",
+                          activeTemplate === template.id && "bg-primary/10 text-primary"
+                        )}
                       >
                         <div className="font-medium text-sm">{template.name}</div>
                         <div className="text-xs text-muted-foreground">{template.description}</div>
@@ -381,6 +542,7 @@ export default function PlaygroundPage() {
                             <Check className="w-2.5 h-2.5 text-primary-foreground" />
                           )}
                         </div>
+                        <module.icon className="w-4 h-4 text-muted-foreground" />
                         <div>
                           <div className="font-medium text-sm">{module.name}</div>
                           <div className="text-xs text-muted-foreground">{module.description}</div>
@@ -425,6 +587,12 @@ export default function PlaygroundPage() {
               <div className="flex items-center gap-2 text-sm">
                 <Code2 className="w-4 h-4 text-primary" />
                 <span className="font-medium">Code</span>
+                {selectedModules.length > 0 && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs">
+                    <Sparkles className="w-3 h-3" />
+                    {selectedModules.join(", ")}
+                  </span>
+                )}
               </div>
               <Button
                 variant="ghost"
@@ -436,14 +604,22 @@ export default function PlaygroundPage() {
                 Reset
               </Button>
             </div>
-            <div className="flex-1 bg-[#0d0d14] border border-border rounded-xl overflow-hidden">
-              <textarea
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className="w-full h-full p-4 font-mono text-sm bg-transparent text-foreground resize-none focus:outline-none code-gradient"
-                spellCheck={false}
-                placeholder="Write your code here..."
-              />
+            <div className="flex-1 bg-[#0d0d14] border border-border rounded-xl overflow-hidden flex flex-col">
+              <div className="flex-1 relative">
+                {/* Line numbers */}
+                <div className="absolute left-0 top-0 bottom-0 w-10 bg-[#0a0a0f] border-r border-border/50 flex flex-col pt-4 px-2 text-xs text-muted-foreground font-mono leading-6 select-none">
+                  {code.split("\n").map((_, i) => (
+                    <div key={i} className="text-right">{i + 1}</div>
+                  ))}
+                </div>
+                <textarea
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  className="w-full h-full pl-12 p-4 font-mono text-sm bg-transparent text-foreground resize-none focus:outline-none leading-6"
+                  spellCheck={false}
+                  placeholder="Write your code here..."
+                />
+              </div>
             </div>
           </motion.div>
 
@@ -475,12 +651,23 @@ export default function PlaygroundPage() {
               )}
             </div>
 
-            {/* Error Banner */}
-            {error && (
-              <div className="mb-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+            {/* Syntax Error Banner */}
+            {syntaxError && (
+              <div className="mb-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
                 <div className="flex items-center gap-2 text-red-400 mb-1">
                   <AlertTriangle className="w-4 h-4" />
-                  <span className="font-medium text-sm">Error</span>
+                  <span className="font-medium text-sm">Syntax Error</span>
+                </div>
+                <pre className="text-sm text-red-300 whitespace-pre-wrap font-mono">{syntaxError}</pre>
+              </div>
+            )}
+
+            {/* Runtime Error Banner */}
+            {error && !syntaxError && (
+              <div className="mb-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                <div className="flex items-center gap-2 text-red-400 mb-1">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span className="font-medium text-sm">Runtime Error</span>
                 </div>
                 <p className="text-sm text-red-300">{error}</p>
               </div>
@@ -515,7 +702,7 @@ export default function PlaygroundPage() {
                   <div className="flex items-center justify-center h-full text-muted-foreground">
                     <div className="text-center">
                       <Zap className="w-6 h-6 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">Click "Run" to execute</p>
+                      <p className="text-sm">Click "Run" or press Ctrl+Enter to execute</p>
                     </div>
                   </div>
                 )}
