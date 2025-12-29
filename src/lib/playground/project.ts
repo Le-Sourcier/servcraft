@@ -320,24 +320,25 @@ export interface TerminalCommand {
 
 // Icons for file types
 export const fileIcons: Record<string, string> = {
-  ts: '📘',
-  tsx: '📘',
-  js: '📗',
-  json: '🔧',
-  prisma: '🗄️',
-  env: '🔐',
-  md: '📝',
-  css: '🎨',
-  html: '🌐',
-  yml: '⚙️',
-  yaml: '⚙️',
-  folder: '📁',
-  default: '📄',
+  ts: "code",
+  tsx: "code",
+  js: "code",
+  json: "json",
+  prisma: "database",
+  env: "settings",
+  md: "file-text",
+  css: "palette",
+  html: "globe",
+  yml: "settings",
+  yaml: "settings",
+  folder: "folder",
+  folderOpen: "folder-open",
+  default: "file-code",
 };
 
-// Get icon for a file
-export function getFileIcon(filename: string, isFolder = false): string {
-  if (isFolder) return fileIcons.folder;
+// Get icon name for a file
+export function getFileIconName(filename: string, isFolder = false, isExpanded = false): string {
+  if (isFolder) return isExpanded ? "folderOpen" : "folder";
   const ext = filename.split('.').pop() || '';
   return fileIcons[ext] || fileIcons.default;
 }

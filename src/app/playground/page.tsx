@@ -5,46 +5,36 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Terminal,
   Play,
-  RotateCcw,
   Loader2,
-  Check,
-  Copy,
   Sparkles,
-  Shield,
-  Clock,
-  Cpu,
-  AlertTriangle,
   ChevronDown,
   Code2,
-  Zap,
   ExternalLink,
-  FileCode,
-  Database,
-  Key,
-  Mail,
-  HardDrive,
-  Radio,
-  Users,
   Folder,
   FolderOpen,
   X,
   Search,
-  Settings,
   Layers,
   Package,
   Download,
-  Trash2,
-  Edit3,
-  Plus,
   ChevronRight,
-  ChevronLeft,
   Maximize2,
   Minimize2,
   Terminal as TerminalIcon,
-  Box,
-  ShieldAlert,
-  CheckCircle2,
-  Info
+  FileCode,
+  FileJson,
+  FileText,
+  Database,
+  Settings,
+  Trash2,
+  Edit3,
+  Plus,
+  Check,
+  AlertTriangle,
+  Palette,
+  Globe,
+  Braces,
+  CheckCircle2
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/Button";
@@ -54,7 +44,7 @@ import {
   availablePackages,
   availableModules,
   fileIcons,
-  getFileIcon,
+  getFileIconName,
   flattenFiles,
   type FileNode,
   type PackageDependency,
@@ -77,6 +67,71 @@ function Files({ className }: { className?: string }) {
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 12L7.5 16.5M12 12l4.5 4.5M12 12V7.5" />
     </svg>
   );
+}
+
+// Icon component that renders the correct Lucide icon
+function FileIcon({ name, className }: { name: string; className?: string }) {
+  const iconProps = { className, size: 14 };
+
+  switch (name) {
+    case "folder":
+      return <Folder {...iconProps} />;
+    case "folder-open":
+      return <FolderOpen {...iconProps} />;
+    case "code":
+      return <Code2 {...iconProps} />;
+    case "json":
+      return <FileJson {...iconProps} />;
+    case "file-text":
+      return <FileText {...iconProps} />;
+    case "database":
+      return <Database {...iconProps} />;
+    case "settings":
+      return <Settings {...iconProps} />;
+    case "palette":
+      return <Palette {...iconProps} />;
+    case "globe":
+      return <Globe {...iconProps} />;
+    case "file-code":
+      return <FileCode {...iconProps} />;
+    default:
+      return <FileCode {...iconProps} />;
+  }
+}
+
+// Get Lucide icon component for file
+function getFileIconComponent(filename: string, isFolder = false, isExpanded = false) {
+  const iconName = getFileIconName(filename, isFolder, isExpanded);
+  return { iconName, IconComponent: () => <FileIcon name={iconName} /> };
+}
+
+// Simple syntax highlighter for TypeScript/JavaScript
+function highlightCode(code: string, _language: string): { jsx: string } {
+  if (!code) return { jsx: "" };
+
+  let result = code
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  // Apply syntax highlighting patterns
+  const patterns: [RegExp, string][] = [
+    [/\/\/.*$/gm, '<span class="text-muted-foreground">$&</span>'], // Comments
+    [/\/\*[\s\S]*?\*\//g, '<span class="text-muted-foreground">$&</span>'], // Block comments
+    [/"[^"]*"/g, '<span class="text-green-400">$&</span>'], // Double quotes
+    [/'[^']*'/g, '<span class="text-green-400">$&</span>'], // Single quotes
+    [/`[^`]*`/g, '<span class="text-green-400">$&</span>'], // Template
+    [/\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|import|export|from|async|await|try|catch|throw|new|class|extends|typeof|instanceof|this|static|public|private|protected|readonly)\b/g, '<span class="text-primary font-semibold">$&</span>'], // Keywords
+    [/\b(string|number|boolean|void|null|undefined|any|never|unknown|interface|type|enum|true|false)\b/g, '<span class="text-cyan-400">$&</span>'], // Types
+    [/\b\d+\.?\d*\b/g, '<span class="text-orange-400">$&</span>'], // Numbers
+    [/\b[a-zA-Z_$][a-zA-Z0-9_$]*(?=\()/g, '<span class="text-yellow-300">$&</span>'], // Functions
+  ];
+
+  for (const [regex, replacement] of patterns) {
+    result = result.replace(regex, replacement);
+  }
+
+  return { jsx: result };
 }
 
 // Available packages
@@ -709,7 +764,8 @@ export default function PlaygroundPage() {
             <div className="flex items-center bg-[#181825] border-b border-[#313244] overflow-x-auto">
               {openTabs.map((tab) => {
                 const isActive = activeTabId === tab.id;
-                const icon = getFileIcon(tab.file.name || "");
+                const iconName = getFileIconName(tab.file.name || "");
+                const TabIcon = () => <FileIcon name={iconName} className="text-muted-foreground" />;
 
                 return (
                   <button
@@ -725,7 +781,7 @@ export default function PlaygroundPage() {
                         : "text-muted-foreground hover:bg-[#313244]/50"
                     )}
                   >
-                    <span>{icon}</span>
+                    <TabIcon />
                     <span className="truncate">{tab.file.name}</span>
                     <span
                       onClick={(e) => {
@@ -743,24 +799,35 @@ export default function PlaygroundPage() {
           )}
 
           {/* Editor */}
-          <div className="flex-1 relative">
+          <div className="flex-1 relative overflow-hidden">
             {selectedFile ? (
-              <div className="absolute inset-0 flex flex-col">
-                {/* Line numbers and code */}
-                <div className="flex-1 flex overflow-hidden">
-                  {/* Line numbers */}
-                  <div className="w-10 bg-[#181825] border-r border-[#313244] py-4 px-2 text-xs text-muted-foreground font-mono leading-6 select-none text-right">
-                    {selectedFile.content?.split('\n').map((_, i) => (
-                      <div key={i}>{i + 1}</div>
-                    ))}
-                  </div>
+              <div className="absolute inset-0 flex">
+                {/* Line numbers */}
+                <div className="w-10 bg-[#181825] border-r border-[#313244] py-4 px-2 text-xs text-muted-foreground font-mono leading-6 select-none text-right flex-shrink-0 overflow-hidden">
+                  {selectedFile.content?.split('\n').map((_, i) => (
+                    <div key={i} className="h-6">{i + 1}</div>
+                  ))}
+                </div>
 
-                  {/* Code area */}
+                {/* Code editor with syntax highlighting */}
+                <div className="flex-1 relative overflow-hidden">
+                  {/* Syntax highlighted background */}
+                  <pre
+                    className="absolute inset-0 p-4 font-mono text-sm leading-6 whitespace-pre-wrap pointer-events-none overflow-hidden"
+                    aria-hidden="true"
+                  >
+                    <code className="syntax-keyword text-primary">{highlightCode(selectedFile.content || "", "typescript").jsx}</code>
+                  </pre>
+
+                  {/* Editable textarea */}
                   <textarea
                     value={selectedFile.content || ""}
                     onChange={(e) => updateFileContent(getFilePath(selectedFile, files), e.target.value)}
-                    className="flex-1 bg-[#1e1e2e] p-4 font-mono text-sm text-foreground resize-none focus:outline-none leading-6"
+                    className="absolute inset-0 w-full h-full p-4 font-mono text-sm text-foreground bg-transparent resize-none focus:outline-none leading-6 whitespace-pre-wrap"
                     spellCheck={false}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    autoComplete="off"
                   />
                 </div>
               </div>
@@ -896,7 +963,8 @@ function FileTreeItem({
   const isExpanded = file.type === 'folder' && expandedFolders.has(filePath);
   const isSelected = selectedFile === file;
   const hasChildren = file.children && file.children.length > 0;
-  const icon = getFileIcon(file.name);
+  const iconName = getFileIconName(file.name, file.type === 'folder', isExpanded);
+  const IconComponent = () => <FileIcon name={iconName} className="text-muted-foreground" />;
 
   return (
     <div>
@@ -923,8 +991,8 @@ function FileTreeItem({
             )}
           />
         )}
-        {!hasChildren && <span className="w-3 h-3" />}
-        <span>{icon}</span>
+        {!hasChildren && <span className="w-3.5 h-3.5" />}
+        <IconComponent />
         <span className="truncate">{file.name}</span>
       </button>
 
