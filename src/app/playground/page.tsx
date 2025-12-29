@@ -69,33 +69,33 @@ function Files({ className }: { className?: string }) {
   );
 }
 
-// Icon component that renders the correct Lucide icon
+// Icon component that renders the correct Lucide icon with colors
 function FileIcon({ name, className }: { name: string; className?: string }) {
-  const iconProps = { className, size: 14 };
+  const iconProps = { size: 14 };
 
   switch (name) {
     case "folder":
-      return <Folder {...iconProps} />;
+      return <Folder {...iconProps} className={cn("text-yellow-400", className)} />;
     case "folder-open":
-      return <FolderOpen {...iconProps} />;
+      return <FolderOpen {...iconProps} className={cn("text-yellow-400", className)} />;
     case "code":
-      return <Code2 {...iconProps} />;
+      return <Code2 {...iconProps} className={cn("text-blue-400", className)} />;
     case "json":
-      return <FileJson {...iconProps} />;
+      return <FileJson {...iconProps} className={cn("text-yellow-300", className)} />;
     case "file-text":
-      return <FileText {...iconProps} />;
+      return <FileText {...iconProps} className={cn("text-gray-400", className)} />;
     case "database":
-      return <Database {...iconProps} />;
+      return <Database {...iconProps} className={cn("text-purple-400", className)} />;
     case "settings":
-      return <Settings {...iconProps} />;
+      return <Settings {...iconProps} className={cn("text-gray-400", className)} />;
     case "palette":
-      return <Palette {...iconProps} />;
+      return <Palette {...iconProps} className={cn("text-pink-400", className)} />;
     case "globe":
-      return <Globe {...iconProps} />;
+      return <Globe {...iconProps} className={cn("text-cyan-400", className)} />;
     case "file-code":
-      return <FileCode {...iconProps} />;
+      return <FileCode {...iconProps} className={cn("text-blue-400", className)} />;
     default:
-      return <FileCode {...iconProps} />;
+      return <FileCode {...iconProps} className={cn("text-blue-400", className)} />;
   }
 }
 
@@ -106,32 +106,115 @@ function getFileIconComponent(filename: string, isFolder = false, isExpanded = f
 }
 
 // Simple syntax highlighter for TypeScript/JavaScript
-function highlightCode(code: string, _language: string): { jsx: string } {
-  if (!code) return { jsx: "" };
+function highlightCode(code: string, _language: string): string {
+  if (!code) return "";
 
-  let result = code
+  // Escape HTML first
+  let escaped = code
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-  // Apply syntax highlighting patterns
-  const patterns: [RegExp, string][] = [
-    [/\/\/.*$/gm, '<span class="text-muted-foreground">$&</span>'], // Comments
-    [/\/\*[\s\S]*?\*\//g, '<span class="text-muted-foreground">$&</span>'], // Block comments
-    [/"[^"]*"/g, '<span class="text-green-400">$&</span>'], // Double quotes
-    [/'[^']*'/g, '<span class="text-green-400">$&</span>'], // Single quotes
-    [/`[^`]*`/g, '<span class="text-green-400">$&</span>'], // Template
-    [/\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|import|export|from|async|await|try|catch|throw|new|class|extends|typeof|instanceof|this|static|public|private|protected|readonly)\b/g, '<span class="text-primary font-semibold">$&</span>'], // Keywords
-    [/\b(string|number|boolean|void|null|undefined|any|never|unknown|interface|type|enum|true|false)\b/g, '<span class="text-cyan-400">$&</span>'], // Types
-    [/\b\d+\.?\d*\b/g, '<span class="text-orange-400">$&</span>'], // Numbers
-    [/\b[a-zA-Z_$][a-zA-Z0-9_$]*(?=\()/g, '<span class="text-yellow-300">$&</span>'], // Functions
-  ];
-
-  for (const [regex, replacement] of patterns) {
-    result = result.replace(regex, replacement);
+  // Tokenize the code to avoid overlapping replacements
+  interface Token {
+    type: 'text' | 'comment' | 'string' | 'keyword' | 'type' | 'number' | 'function';
+    value: string;
   }
 
-  return { jsx: result };
+  const lines = escaped.split('\n');
+  const result: string[] = [];
+
+  for (const line of lines) {
+    let remaining = line;
+    const tokens: Token[] = [];
+
+    while (remaining.length > 0) {
+      let matched = false;
+
+      // Try to match comment
+      if (remaining.startsWith('//')) {
+        tokens.push({ type: 'comment', value: remaining });
+        remaining = '';
+        matched = true;
+        continue;
+      }
+
+      // Try to match strings
+      const stringMatch = remaining.match(/^("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/);
+      if (stringMatch) {
+        tokens.push({ type: 'string', value: stringMatch[0] });
+        remaining = remaining.slice(stringMatch[0].length);
+        matched = true;
+        continue;
+      }
+
+      // Try to match numbers
+      const numberMatch = remaining.match(/^\d+\.?\d*/);
+      if (numberMatch) {
+        tokens.push({ type: 'number', value: numberMatch[0] });
+        remaining = remaining.slice(numberMatch[0].length);
+        matched = true;
+        continue;
+      }
+
+      // Try to match keywords
+      const keywordMatch = remaining.match(/^(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|import|export|from|async|await|try|catch|throw|new|class|extends|typeof|instanceof|this|static|public|private|protected|readonly)\b/);
+      if (keywordMatch) {
+        tokens.push({ type: 'keyword', value: keywordMatch[0] });
+        remaining = remaining.slice(keywordMatch[0].length);
+        matched = true;
+        continue;
+      }
+
+      // Try to match types
+      const typeMatch = remaining.match(/^(string|number|boolean|void|null|undefined|any|never|unknown|interface|type|enum|true|false)\b/);
+      if (typeMatch) {
+        tokens.push({ type: 'type', value: typeMatch[0] });
+        remaining = remaining.slice(typeMatch[0].length);
+        matched = true;
+        continue;
+      }
+
+      // Try to match function calls
+      const functionMatch = remaining.match(/^[a-zA-Z_$][a-zA-Z0-9_$]*(?=\()/);
+      if (functionMatch) {
+        tokens.push({ type: 'function', value: functionMatch[0] });
+        remaining = remaining.slice(functionMatch[0].length);
+        matched = true;
+        continue;
+      }
+
+      // No match, take one character as text
+      if (!matched) {
+        tokens.push({ type: 'text', value: remaining[0] });
+        remaining = remaining.slice(1);
+      }
+    }
+
+    // Convert tokens to HTML
+    const lineHtml = tokens.map(token => {
+      switch (token.type) {
+        case 'comment':
+          return `<span class="text-muted-foreground">${token.value}</span>`;
+        case 'string':
+          return `<span class="text-green-400">${token.value}</span>`;
+        case 'keyword':
+          return `<span class="text-primary font-semibold">${token.value}</span>`;
+        case 'type':
+          return `<span class="text-cyan-400">${token.value}</span>`;
+        case 'number':
+          return `<span class="text-orange-400">${token.value}</span>`;
+        case 'function':
+          return `<span class="text-yellow-300">${token.value}</span>`;
+        default:
+          return token.value;
+      }
+    }).join('');
+
+    result.push(lineHtml);
+  }
+
+  return result.join('\n');
 }
 
 // Available packages
@@ -159,7 +242,7 @@ export default function PlaygroundPage() {
   // State for terminal
   const [terminalCommands, setTerminalCommands] = useState<TerminalCommand[]>([
     {
-      id: "init",
+      id: "init-0",
       command: "",
       output: ["Welcome to ServCraft Playground v0.4.9", "Type 'help' to see available commands."],
       timestamp: new Date(),
@@ -168,7 +251,7 @@ export default function PlaygroundPage() {
   ]);
   const [terminalInput, setTerminalInput] = useState("");
   const terminalRef = useRef<HTMLDivElement>(null);
-  const [terminalIdCounter, setTerminalIdCounter] = useState(0);
+  const [terminalIdCounter, setTerminalIdCounter] = useState(1);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLPreElement>(null);
 
@@ -268,14 +351,21 @@ export default function PlaygroundPage() {
   };
 
   // Update file content
-  const updateFileContent = (path: string, content: string) => {
+  const updateFileContent = useCallback((path: string, content: string) => {
     setFiles(prev => {
-      const allFiles = flattenFiles(prev);
-      const targetFile = allFiles.find(f => getFilePath(f, prev) === path);
-      if (targetFile && targetFile.content !== undefined) {
-        targetFile.content = content;
-      }
-      return [...prev];
+      const updateNode = (nodes: FileNode[]): FileNode[] => {
+        return nodes.map(node => {
+          const nodePath = getFilePath(node, prev);
+          if (nodePath === path && node.type === 'file') {
+            return { ...node, content };
+          }
+          if (node.children) {
+            return { ...node, children: updateNode(node.children) };
+          }
+          return node;
+        });
+      };
+      return updateNode(prev);
     });
 
     setOpenTabs(prev => prev.map(tab => {
@@ -284,7 +374,7 @@ export default function PlaygroundPage() {
       }
       return tab;
     }));
-  };
+  }, [files, getFilePath]);
 
   // Terminal auto-scroll
   useEffect(() => {
@@ -303,14 +393,17 @@ export default function PlaygroundPage() {
 
   // Add terminal output
   const addTerminalOutput = (output: string[], type: TerminalCommand['type'] = 'output', command = "") => {
-    setTerminalCommands(prev => [...prev, {
-      id: `cmd-${terminalIdCounter}`,
-      command,
-      output,
-      timestamp: new Date(),
-      type
-    }]);
-    setTerminalIdCounter(prev => prev + 1);
+    setTerminalIdCounter(prev => {
+      const newId = prev;
+      setTerminalCommands(cmds => [...cmds, {
+        id: `cmd-${newId}`,
+        command,
+        output,
+        timestamp: new Date(),
+        type
+      }]);
+      return prev + 1;
+    });
   };
 
   // Execute terminal command
@@ -343,14 +436,16 @@ export default function PlaygroundPage() {
         break;
 
       case "clear":
-        setTerminalCommands([{
-          id: "init",
-          command: "",
-          output: ["Terminal cleared. Type 'help' for commands."],
-          timestamp: new Date(),
-          type: "system"
-        }]);
-        setTerminalIdCounter(0);
+        setTerminalIdCounter(prev => {
+          setTerminalCommands([{
+            id: `init-${prev}`,
+            command: "",
+            output: ["Terminal cleared. Type 'help' for commands."],
+            timestamp: new Date(),
+            type: "system"
+          }]);
+          return prev + 1;
+        });
         break;
 
       case "npm":
@@ -829,7 +924,7 @@ export default ${mod.name}Controller;
               {openTabs.map((tab) => {
                 const isActive = activeTabId === tab.id;
                 const iconName = getFileIconName(tab.file.name || "");
-                const TabIcon = () => <FileIcon name={iconName} className="text-muted-foreground" />;
+                const TabIcon = () => <FileIcon name={iconName} />;
 
                 return (
                   <button
@@ -874,23 +969,33 @@ export default ${mod.name}Controller;
                 </div>
 
                 {/* Code editor with syntax highlighting */}
-                <div className="flex-1 relative overflow-hidden">
+                <div className="flex-1 relative">
                   {/* Syntax highlighted background */}
                   <pre
                     ref={highlightRef}
                     className="absolute inset-0 p-4 font-mono text-sm leading-6 whitespace-pre-wrap pointer-events-none overflow-auto"
                     aria-hidden="true"
-                    dangerouslySetInnerHTML={{ __html: highlightCode(selectedFile.content || "", selectedFile.language || "typescript").jsx }}
+                    dangerouslySetInnerHTML={{ __html: highlightCode(selectedFile.content || "", selectedFile.language || "typescript") }}
                   />
 
                   {/* Editable textarea with transparent text */}
                   <textarea
                     ref={editorRef}
                     value={selectedFile.content || ""}
-                    onChange={(e) => updateFileContent(getFilePath(selectedFile, files), e.target.value)}
+                    onChange={(e) => {
+                      const newContent = e.target.value;
+                      const path = getFilePath(selectedFile, files);
+                      updateFileContent(path, newContent);
+                      if (selectedFile && activeTabId) {
+                        setSelectedFile({ ...selectedFile, content: newContent });
+                      }
+                    }}
                     onScroll={handleEditorScroll}
-                    className="absolute inset-0 w-full h-full p-4 font-mono text-sm resize-none focus:outline-none leading-6 whitespace-pre-wrap bg-transparent caret-white selection:bg-primary/30"
-                    style={{ color: "transparent", WebkitTextFillColor: "transparent" }}
+                    className="absolute inset-0 w-full h-full p-4 font-mono text-sm resize-none focus:outline-none leading-6 whitespace-pre-wrap bg-transparent caret-white selection:bg-primary/30 overflow-auto"
+                    style={{
+                      color: "transparent",
+                      WebkitTextFillColor: "transparent"
+                    }}
                     spellCheck={false}
                     autoCapitalize="off"
                     autoCorrect="off"
@@ -1031,7 +1136,7 @@ function FileTreeItem({
   const isSelected = selectedFile === file;
   const hasChildren = file.children && file.children.length > 0;
   const iconName = getFileIconName(file.name, file.type === 'folder', isExpanded);
-  const IconComponent = () => <FileIcon name={iconName} className="text-muted-foreground" />;
+  const IconComponent = () => <FileIcon name={iconName} />;
 
   return (
     <div>
