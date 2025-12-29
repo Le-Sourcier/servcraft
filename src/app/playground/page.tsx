@@ -169,6 +169,8 @@ export default function PlaygroundPage() {
   const [terminalInput, setTerminalInput] = useState("");
   const terminalRef = useRef<HTMLDivElement>(null);
   const [terminalIdCounter, setTerminalIdCounter] = useState(0);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const highlightRef = useRef<HTMLPreElement>(null);
 
   // State for UI
   const [activeActivity, setActiveActivity] = useState("explorer");
@@ -290,6 +292,14 @@ export default function PlaygroundPage() {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
   }, [terminalCommands]);
+
+  // Sync scroll between textarea and highlight
+  const handleEditorScroll = () => {
+    if (editorRef.current && highlightRef.current) {
+      highlightRef.current.scrollTop = editorRef.current.scrollTop;
+      highlightRef.current.scrollLeft = editorRef.current.scrollLeft;
+    }
+  };
 
   // Add terminal output
   const addTerminalOutput = (output: string[], type: TerminalCommand['type'] = 'output', command = "") => {
@@ -512,14 +522,68 @@ export default function PlaygroundPage() {
     addTerminalOutput([`$ servcraft add ${mod.name}`], 'command');
     addTerminalOutput([`Adding ${mod.name} module...`], 'output');
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    addTerminalOutput([`⠋ Installing dependencies...`], 'output');
+
+    await new Promise(resolve => setTimeout(resolve, 800));
+    addTerminalOutput([`⠙ Generating module files...`], 'output');
+
+    await new Promise(resolve => setTimeout(resolve, 700));
 
     setInstalledModules(prev => prev.map(m =>
       m.name === mod.name ? { ...m, installed: true } : m
     ));
 
+    // Create module folder and files
+    setFiles(prev => {
+      const moduleFolder = prev.find(f => f.name === 'src');
+      if (moduleFolder?.children) {
+        const modulesFolder = moduleFolder.children.find(f => f.name === 'modules');
+        if (modulesFolder && !modulesFolder.children?.find(f => f.name === mod.name)) {
+          modulesFolder.children = modulesFolder.children || [];
+          modulesFolder.children.push({
+            name: mod.name,
+            type: 'folder',
+            children: [
+              {
+                name: 'index.ts',
+                type: 'file',
+                language: 'typescript',
+                content: `// ${mod.name} module
+export * from './${mod.name}.controller';
+export * from './${mod.name}.service';
+`,
+              },
+              {
+                name: `${mod.name}.controller.ts`,
+                type: 'file',
+                language: 'typescript',
+                content: `import { FastifyPluginAsync } from 'fastify';
+
+const ${mod.name}Controller: FastifyPluginAsync = async (fastify) => {
+  // ${mod.name} routes
+  fastify.get('/', async () => {
+    return { module: '${mod.name}', status: 'active' };
+  });
+};
+
+export default ${mod.name}Controller;
+`,
+              },
+            ],
+          });
+        }
+      }
+      return [...prev];
+    });
+
     addTerminalOutput([
       `✓ Module '${mod.name}' installed successfully`,
+      ``,
+      `Files created:`,
+      `  src/modules/${mod.name}/index.ts`,
+      `  src/modules/${mod.name}/${mod.name}.controller.ts`,
+      ``,
       `Dependencies: @servcraft/${mod.name}@0.4.9`,
     ], 'output');
 
@@ -813,17 +877,20 @@ export default function PlaygroundPage() {
                 <div className="flex-1 relative overflow-hidden">
                   {/* Syntax highlighted background */}
                   <pre
-                    className="absolute inset-0 p-4 font-mono text-sm leading-6 whitespace-pre-wrap pointer-events-none overflow-hidden"
+                    ref={highlightRef}
+                    className="absolute inset-0 p-4 font-mono text-sm leading-6 whitespace-pre-wrap pointer-events-none overflow-auto"
                     aria-hidden="true"
-                  >
-                    <code className="syntax-keyword text-primary">{highlightCode(selectedFile.content || "", "typescript").jsx}</code>
-                  </pre>
+                    dangerouslySetInnerHTML={{ __html: highlightCode(selectedFile.content || "", selectedFile.language || "typescript").jsx }}
+                  />
 
-                  {/* Editable textarea */}
+                  {/* Editable textarea with transparent text */}
                   <textarea
+                    ref={editorRef}
                     value={selectedFile.content || ""}
                     onChange={(e) => updateFileContent(getFilePath(selectedFile, files), e.target.value)}
-                    className="absolute inset-0 w-full h-full p-4 font-mono text-sm text-foreground bg-transparent resize-none focus:outline-none leading-6 whitespace-pre-wrap"
+                    onScroll={handleEditorScroll}
+                    className="absolute inset-0 w-full h-full p-4 font-mono text-sm resize-none focus:outline-none leading-6 whitespace-pre-wrap bg-transparent caret-white selection:bg-primary/30"
+                    style={{ color: "transparent", WebkitTextFillColor: "transparent" }}
                     spellCheck={false}
                     autoCapitalize="off"
                     autoCorrect="off"
