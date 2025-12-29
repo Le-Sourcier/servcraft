@@ -90,7 +90,7 @@ export default function PlaygroundPage() {
   const [files, setFiles] = useState<FileNode[]>(initialProjectFiles);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(["src", "src/routes"]));
   const [selectedFile, setSelectedFile] = useState<FileNode | null>(null);
-  const [openTabs, setOpenTabs] = useState<FileNode[]>([]);
+  const [openTabs, setOpenTabs] = useState<{ file: FileNode; id: string }[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
 
   // State for packages/modules
@@ -133,26 +133,30 @@ export default function PlaygroundPage() {
   }, [files]);
 
   // Get file path
-  const getFilePath = (file: FileNode, allFiles: FileNode[]): string => {
-    const path: string[] = [file.name];
-    let current = file;
-
-    const findParent = (nodes: FileNode[], target: FileNode): string[] => {
+  const getFilePath = useCallback((file: FileNode, allFiles: FileNode[]): string => {
+    const findPath = (nodes: FileNode[], target: FileNode, currentPath = ""): string => {
       for (const node of nodes) {
-        if (node === target) return [node.name];
-        if (node.children) {
-          const childPath = findParent(node.children, target);
-          if (childPath.length > 0) {
-            return [node.name, ...childPath];
+        const newPath = currentPath ? `${currentPath}/${node.name}` : node.name;
+        if (node.name === target.name && node.type === target.type) {
+          // For files, also check content to make unique
+          if (node.type === 'file' && target.type === 'file') {
+            if (node.content === target.content) {
+              return newPath;
+            }
+          } else {
+            return newPath;
           }
         }
+        if (node.children) {
+          const found = findPath(node.children, target, newPath);
+          if (found) return found;
+        }
       }
-      return [];
+      return "";
     };
 
-    const parentPath = findParent(allFiles, file);
-    return parentPath.join("/");
-  };
+    return findPath(allFiles, file);
+  }, []);
 
   // Toggle folder expansion
   const toggleFolder = (path: string) => {
@@ -170,33 +174,32 @@ export default function PlaygroundPage() {
   // Open file in editor
   const openFile = (file: FileNode) => {
     const path = getFilePath(file, files);
-    const existingTab = openTabs.find(tab => getFilePath(tab, files) === path);
+    const existingTab = openTabs.find(tab => getFilePath(tab.file, files) === path);
 
     if (existingTab) {
-      setActiveTabId(path);
-      setSelectedFile(existingTab);
+      setActiveTabId(existingTab.id);
+      setSelectedFile(existingTab.file);
     } else {
-      const newTab = { ...file };
-      setOpenTabs(prev => [...prev, newTab]);
-      setActiveTabId(path);
-      setSelectedFile(newTab);
+      const id = `${path}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      setOpenTabs(prev => [...prev, { file, id }]);
+      setActiveTabId(id);
+      setSelectedFile(file);
     }
   };
 
   // Close tab
-  const closeTab = (e: React.MouseEvent, file: FileNode) => {
+  const closeTab = (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
-    const path = getFilePath(file, files);
-    const tabIndex = openTabs.findIndex(tab => getFilePath(tab, files) === path);
+    const tabIndex = openTabs.findIndex(tab => tab.id === tabId);
 
-    const newTabs = openTabs.filter(tab => getFilePath(tab, files) !== path);
+    const newTabs = openTabs.filter(tab => tab.id !== tabId);
 
-    if (activeTabId === path) {
+    if (activeTabId === tabId) {
       if (newTabs.length > 0) {
         const newActiveIndex = tabIndex > 0 ? tabIndex - 1 : 0;
         const newActive = newTabs[newActiveIndex];
-        setActiveTabId(getFilePath(newActive, files));
-        setSelectedFile(newActive);
+        setActiveTabId(newActive.id);
+        setSelectedFile(newActive.file);
       } else {
         setActiveTabId(null);
         setSelectedFile(null);
@@ -218,8 +221,8 @@ export default function PlaygroundPage() {
     });
 
     setOpenTabs(prev => prev.map(tab => {
-      if (getFilePath(tab, files) === path) {
-        return { ...tab, content };
+      if (getFilePath(tab.file, files) === path) {
+        return { ...tab, file: { ...tab.file, content } };
       }
       return tab;
     }));
@@ -695,17 +698,16 @@ export default function PlaygroundPage() {
           {/* Tabs */}
           {openTabs.length > 0 && (
             <div className="flex items-center bg-[#181825] border-b border-[#313244] overflow-x-auto">
-              {openTabs.map((file) => {
-                const path = getFilePath(file, files);
-                const isActive = activeTabId === path;
-                const icon = getFileIcon(file.name || "");
+              {openTabs.map((tab) => {
+                const isActive = activeTabId === tab.id;
+                const icon = getFileIcon(tab.file.name || "");
 
                 return (
                   <button
-                    key={path}
+                    key={tab.id}
                     onClick={() => {
-                      setActiveTabId(path);
-                      setSelectedFile(file);
+                      setActiveTabId(tab.id);
+                      setSelectedFile(tab.file);
                     }}
                     className={cn(
                       "flex items-center gap-2 px-3 py-2 text-xs border-r border-[#313244] min-w-0 max-w-40",
@@ -715,11 +717,11 @@ export default function PlaygroundPage() {
                     )}
                   >
                     <span>{icon}</span>
-                    <span className="truncate">{file.name}</span>
+                    <span className="truncate">{tab.file.name}</span>
                     <span
                       onClick={(e) => {
                         e.stopPropagation();
-                        closeTab(e, file);
+                        closeTab(e, tab.id);
                       }}
                       className="ml-1 p-0.5 hover:bg-[#313244] rounded opacity-0 hover:opacity-100 cursor-pointer"
                     >
