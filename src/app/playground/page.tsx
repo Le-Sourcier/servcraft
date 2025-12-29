@@ -104,7 +104,7 @@ export default function PlaygroundPage() {
   // State for terminal
   const [terminalCommands, setTerminalCommands] = useState<TerminalCommand[]>([
     {
-      id: "1",
+      id: "init",
       command: "",
       output: ["Welcome to ServCraft Playground v0.4.9", "Type 'help' to see available commands."],
       timestamp: new Date(),
@@ -113,6 +113,7 @@ export default function PlaygroundPage() {
   ]);
   const [terminalInput, setTerminalInput] = useState("");
   const terminalRef = useRef<HTMLDivElement>(null);
+  const [terminalIdCounter, setTerminalIdCounter] = useState(0);
 
   // State for UI
   const [activeActivity, setActiveActivity] = useState("explorer");
@@ -238,12 +239,13 @@ export default function PlaygroundPage() {
   // Add terminal output
   const addTerminalOutput = (output: string[], type: TerminalCommand['type'] = 'output', command = "") => {
     setTerminalCommands(prev => [...prev, {
-      id: Date.now().toString(),
+      id: `cmd-${terminalIdCounter}`,
       command,
       output,
       timestamp: new Date(),
       type
     }]);
+    setTerminalIdCounter(prev => prev + 1);
   };
 
   // Execute terminal command
@@ -276,7 +278,14 @@ export default function PlaygroundPage() {
         break;
 
       case "clear":
-        setTerminalCommands([]);
+        setTerminalCommands([{
+          id: "init",
+          command: "",
+          output: ["Terminal cleared. Type 'help' for commands."],
+          timestamp: new Date(),
+          type: "system"
+        }]);
+        setTerminalIdCounter(0);
         break;
 
       case "npm":
