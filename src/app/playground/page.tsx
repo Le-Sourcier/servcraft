@@ -254,6 +254,7 @@ export default function PlaygroundPage() {
   const [terminalIdCounter, setTerminalIdCounter] = useState(1);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLPreElement>(null);
+  const lineNumbersRef = useRef<HTMLDivElement>(null);
 
   // State for UI
   const [activeActivity, setActiveActivity] = useState("explorer");
@@ -383,11 +384,12 @@ export default function PlaygroundPage() {
     }
   }, [terminalCommands]);
 
-  // Sync scroll between textarea and highlight
+  // Sync scroll between textarea, highlight, and line numbers
   const handleEditorScroll = () => {
-    if (editorRef.current && highlightRef.current) {
+    if (editorRef.current && highlightRef.current && lineNumbersRef.current) {
       highlightRef.current.scrollTop = editorRef.current.scrollTop;
       highlightRef.current.scrollLeft = editorRef.current.scrollLeft;
+      lineNumbersRef.current.scrollTop = editorRef.current.scrollTop;
     }
   };
 
@@ -962,7 +964,10 @@ export default ${mod.name}Controller;
             {selectedFile ? (
               <div className="absolute inset-0 flex">
                 {/* Line numbers */}
-                <div className="w-10 bg-[#181825] border-r border-[#313244] py-4 px-2 text-xs text-muted-foreground font-mono leading-6 select-none text-right flex-shrink-0 overflow-hidden">
+                <div
+                  ref={lineNumbersRef}
+                  className="w-10 bg-[#181825] border-r border-[#313244] py-4 px-2 text-xs text-muted-foreground font-mono leading-6 select-none text-right flex-shrink-0 overflow-hidden"
+                >
                   {selectedFile.content?.split('\n').map((_, i) => (
                     <div key={i} className="h-6">{i + 1}</div>
                   ))}
@@ -973,7 +978,7 @@ export default ${mod.name}Controller;
                   {/* Syntax highlighted background */}
                   <pre
                     ref={highlightRef}
-                    className="absolute inset-0 p-4 font-mono text-sm leading-6 whitespace-pre-wrap pointer-events-none overflow-auto"
+                    className="absolute inset-0 p-4 font-mono text-sm leading-6 whitespace-pre overflow-auto pointer-events-none"
                     aria-hidden="true"
                     dangerouslySetInnerHTML={{ __html: highlightCode(selectedFile.content || "", selectedFile.language || "typescript") }}
                   />
@@ -991,10 +996,55 @@ export default ${mod.name}Controller;
                       }
                     }}
                     onScroll={handleEditorScroll}
-                    className="absolute inset-0 w-full h-full p-4 font-mono text-sm resize-none focus:outline-none leading-6 whitespace-pre-wrap bg-transparent caret-white selection:bg-primary/30 overflow-auto"
+                    onKeyDown={(e) => {
+                      // Handle Tab key
+                      if (e.key === 'Tab') {
+                        e.preventDefault();
+                        const start = e.currentTarget.selectionStart;
+                        const end = e.currentTarget.selectionEnd;
+                        const newContent =
+                          selectedFile.content!.substring(0, start) +
+                          '  ' +
+                          selectedFile.content!.substring(end);
+
+                        const path = getFilePath(selectedFile, files);
+                        updateFileContent(path, newContent);
+                        setSelectedFile({ ...selectedFile, content: newContent });
+
+                        // Set cursor position after tab
+                        setTimeout(() => {
+                          e.currentTarget.selectionStart = e.currentTarget.selectionEnd = start + 2;
+                        }, 0);
+                      }
+
+                      // Handle Enter key with auto-indent
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const start = e.currentTarget.selectionStart;
+                        const content = selectedFile.content || '';
+                        const lines = content.substring(0, start).split('\n');
+                        const currentLine = lines[lines.length - 1];
+                        const indent = currentLine.match(/^\s*/)?.[0] || '';
+
+                        const newContent =
+                          content.substring(0, start) +
+                          '\n' + indent +
+                          content.substring(start);
+
+                        const path = getFilePath(selectedFile, files);
+                        updateFileContent(path, newContent);
+                        setSelectedFile({ ...selectedFile, content: newContent });
+
+                        setTimeout(() => {
+                          e.currentTarget.selectionStart = e.currentTarget.selectionEnd = start + 1 + indent.length;
+                        }, 0);
+                      }
+                    }}
+                    className="absolute inset-0 w-full h-full p-4 font-mono text-sm resize-none focus:outline-none leading-6 whitespace-pre overflow-auto bg-transparent caret-white selection:bg-primary/30"
                     style={{
                       color: "transparent",
-                      WebkitTextFillColor: "transparent"
+                      WebkitTextFillColor: "transparent",
+                      tabSize: 2
                     }}
                     spellCheck={false}
                     autoCapitalize="off"
