@@ -51,6 +51,7 @@ import {
   type InstalledModule,
   type TerminalCommand
 } from "@/lib/playground/project";
+import { usePlaygroundPersistence } from "@/lib/playground/hooks/usePlaygroundPersistence";
 
 // Activity bar items
 const activityItems = [
@@ -255,6 +256,16 @@ export default function PlaygroundPage() {
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLPreElement>(null);
   const lineNumbersRef = useRef<HTMLDivElement>(null);
+
+  // Persist playground state
+  const { resetPlayground } = usePlaygroundPersistence(
+    files,
+    setFiles,
+    installedPackages,
+    setInstalledPackages,
+    installedModules,
+    setInstalledModules
+  );
 
   // State for UI
   const [activeActivity, setActiveActivity] = useState("explorer");
@@ -733,6 +744,20 @@ export default ${mod.name}Controller;
           >
             <Play className="w-3 h-3" />
             <span className="hidden xs:inline">Run</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (confirm('Reset playground to initial state? This will clear all changes.')) {
+                resetPlayground();
+              }
+            }}
+            className="h-7 text-xs px-2 sm:px-3 text-muted-foreground hover:text-foreground"
+            title="Reset playground"
+          >
+            <Trash2 className="w-3 h-3" />
+            <span className="hidden sm:inline ml-1">Reset</span>
           </Button>
           <Link href="/docs">
             <Button variant="ghost" size="sm" className="h-7 text-xs px-2">
