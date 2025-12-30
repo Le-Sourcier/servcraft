@@ -12,7 +12,7 @@ services:
     ports:
       - "3200:3000"
       # Port range for playground containers
-      - "4000-5000:4000-5000"
+       #- "4000-5000:4000-5000"
     volumes:
       # Mount Docker socket to allow playground to create containers
       - /var/run/docker.sock:/var/run/docker.sock
