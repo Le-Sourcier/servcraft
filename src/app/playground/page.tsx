@@ -992,14 +992,8 @@ export default ${mod.name}Controller;
 
                 {/* Code editor with syntax highlighting */}
                 <div
-                  className="flex-1 relative overflow-auto"
+                  className="flex-1 relative overflow-hidden"
                   ref={editorContainerRef}
-                  onScroll={(e) => {
-                    // Sync line numbers when container scrolls
-                    if (lineNumbersRef.current) {
-                      lineNumbersRef.current.scrollTop = e.currentTarget.scrollTop;
-                    }
-                  }}
                 >
                   {/* Syntax highlighted background */}
                   <pre
@@ -1013,6 +1007,13 @@ export default ${mod.name}Controller;
                   <textarea
                     ref={editorRef}
                     value={selectedFile.content || ""}
+                    onScroll={(e) => {
+                      // Sync container scroll with textarea scroll
+                      if (editorContainerRef.current && lineNumbersRef.current) {
+                        editorContainerRef.current.scrollTop = e.currentTarget.scrollTop;
+                        lineNumbersRef.current.scrollTop = e.currentTarget.scrollTop;
+                      }
+                    }}
                     onChange={(e) => {
                       const newContent = e.target.value;
                       const path = getFilePath(selectedFile, files);
@@ -1065,13 +1066,13 @@ export default ${mod.name}Controller;
                         }, 0);
                       }
                     }}
-                    className="block w-full p-4 font-mono text-sm resize-none focus:outline-none leading-6 whitespace-pre bg-transparent caret-white selection:bg-primary/30 border-0"
+                    className="absolute inset-0 w-full h-full p-4 font-mono text-sm resize-none focus:outline-none leading-6 whitespace-pre bg-transparent caret-white selection:bg-primary/30 border-0"
                     style={{
                       color: "transparent",
                       WebkitTextFillColor: "transparent",
                       tabSize: 2,
                       outline: 'none',
-                      minHeight: '100%'
+                      overflow: 'auto'
                     }}
                     spellCheck={false}
                     autoCapitalize="off"
