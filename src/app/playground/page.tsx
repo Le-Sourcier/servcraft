@@ -281,17 +281,20 @@ export default function PlaygroundPage() {
     addTerminalOutput(['Starting ServCraft service...'], 'system');
 
     try {
-      // Use the real exposed port from Docker
-      const port = containerSession.exposedPort || 4000;
-      const realUrl = `http://localhost:${port}`;
+      // Generate preview URL using the reverse proxy
+      const previewPath = `/api/playground/preview/${containerSession.sessionId}`;
+      const fullUrl = typeof window !== 'undefined'
+        ? `${window.location.origin}${previewPath}`
+        : previewPath;
 
       const res = await containerSession.executeShellCommand('npm start', true);
       if (res.output) addTerminalOutput([res.output], 'output');
       if (res.error && !res.error.includes('nohup')) addTerminalOutput([res.error], 'error');
 
       addTerminalOutput(['Server started successfully!'], 'system');
-      addTerminalOutput([`Preview URL: ${realUrl}`], 'output');
-      setPreviewUrl(realUrl);
+      addTerminalOutput([`Preview URL: ${fullUrl}`], 'output');
+      addTerminalOutput(['Note: Server may take a few seconds to start'], 'system');
+      setPreviewUrl(fullUrl);
     } catch (err) {
       addTerminalOutput([`Execution error: ${err}`], 'error');
       setIsRunning(false);
