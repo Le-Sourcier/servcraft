@@ -6,7 +6,12 @@ interface UseContainerSessionResult {
   containerId: string | null;
   isReady: boolean;
   isCreating: boolean;
+  isExtended: boolean;
+  projectType: 'js' | 'ts' | null;
   error: string | null;
+  createSession: (projectType: 'js' | 'ts') => Promise<void>;
+  extendSession: () => Promise<void>;
+  refreshFiles: () => Promise<FileNode[]>;
   syncFiles: (files: FileNode[]) => Promise<void>;
   installPackage: (packageName: string) => Promise<{ success: boolean; output: string }>;
   executeCode: (code: string, filename?: string) => Promise<{ success: boolean; output: string; error?: string }>;
@@ -17,61 +22,168 @@ interface UseContainerSessionResult {
  * Hook to manage Docker container session for playground
  */
 export function useContainerSession(): UseContainerSessionResult {
-  const [sessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  // Use a ref to keep sessionId stable and avoid regeneration on and during rerenders
+  const sessionIdRef = useRef<string | null>(null);
+
+  if (!sessionIdRef.current) {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('playground_session_id');
+      if (saved) {
+        sessionIdRef.current = saved;
+      } else {
+        const newId = `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        localStorage.setItem('playground_session_id', newId);
+        sessionIdRef.current = newId;
+      }
+    } else {
+      sessionIdRef.current = 'ssr-session';
+    }
+  }
+
+  const sessionId = sessionIdRef.current;
   const [containerId, setContainerId] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isExtended, setIsExtended] = useState(false);
+  const [projectType, setProjectType] = useState<'js' | 'ts' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const createdRef = useRef(false);
 
-  // Create container on mount
+  // Auto-reconnect on mount if session exists
   useEffect(() => {
     if (createdRef.current) return;
     createdRef.current = true;
 
-    const createContainer = async () => {
-      setIsCreating(true);
-      setError(null);
-
+    const checkStatus = async () => {
       try {
-        const response = await fetch('/api/playground/container', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId }),
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          setContainerId(data.containerId);
-          setIsReady(true);
-        } else {
-          setError(data.error || 'Failed to create container');
+        const response = await fetch(`/api/playground/container?sessionId=${sessionId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.exists) {
+            setContainerId(data.containerId);
+            setProjectType(data.projectType || 'ts');
+            setIsExtended(data.isExtended || false);
+            setIsReady(true);
+          }
+        } else if (response.status === 404) {
+          // Session doesn't exist on server, clear it
+          console.log('[useContainerSession] Session not found on server, clearing local state');
+          setIsReady(false);
+          setContainerId(null);
+          setProjectType(null);
         }
       } catch (err) {
-        setError('Network error: ' + String(err));
-      } finally {
-        setIsCreating(false);
+        console.error('[useContainerSession] Failed to check session status:', err);
       }
     };
 
-    createContainer();
+    checkStatus();
+  }, [sessionId]);
 
-    // Cleanup on unmount
+  // Create session
+  const createSession = useCallback(async (selectedType: 'js' | 'ts') => {
+    setIsCreating(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/playground/container', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, projectType: selectedType }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setContainerId(data.containerId);
+        setProjectType(selectedType);
+        setIsReady(true);
+      } else {
+        setError(data.error || 'Failed to create container');
+      }
+    } catch (err) {
+      setError('Network error: ' + String(err));
+    } finally {
+      setIsCreating(false);
+    }
+  }, [sessionId]);
+
+  // Extend session
+  const extendSession = useCallback(async () => {
+    try {
+      const response = await fetch('/api/playground/container', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setIsExtended(true);
+      }
+    } catch (err) {
+      console.error('Failed to extend session:', err);
+    }
+  }, [sessionId]);
+
+  // Cleanup on unmount (only if container was created)
+  useEffect(() => {
     return () => {
-      if (containerId) {
-        fetch(`/api/playground/container?sessionId=${sessionId}`, {
-          method: 'DELETE',
-        }).catch(console.error);
-      }
+      // In production we might want to keep it alive if they refresh,
+      // but if they close the tab, it will eventually timeout.
     };
-  }, [sessionId, containerId]);
+  }, []);
+
+  // Refresh files from container
+  const refreshFiles = useCallback(async (): Promise<FileNode[]> => {
+    try {
+      const response = await fetch(`/api/playground/files?sessionId=${sessionId}`);
+      const data = await response.json();
+      if (data.success) {
+        // Transform the flat list back to FileNode structure
+        // This is a simplified transformation
+        const tree: FileNode[] = [];
+        const map: Record<string, FileNode> = {};
+
+        data.files.forEach((file: any) => {
+          const parts = file.path.split('/');
+          let currentLevel = tree;
+
+          parts.forEach((part: string, index: number) => {
+            const path = parts.slice(0, index + 1).join('/');
+            if (!map[path]) {
+              const node: FileNode = {
+                name: part,
+                type: (index === parts.length - 1 && file.type === 'file') ? 'file' : 'folder',
+              };
+              if (node.type === 'folder') node.children = [];
+              map[path] = node;
+
+              // Find parent to add to children
+              if (index === 0) {
+                tree.push(node);
+              } else {
+                const parentPath = parts.slice(0, index).join('/');
+                if (map[parentPath] && map[parentPath].children) {
+                  map[parentPath].children!.push(node);
+                }
+              }
+            }
+          });
+        });
+
+        return tree;
+      }
+      return [];
+    } catch (err) {
+      console.error('Failed to refresh files:', err);
+      return [];
+    }
+  }, [sessionId]);
 
   // Sync files to container
   const syncFiles = useCallback(async (files: FileNode[]) => {
-    if (!isReady) {
-      throw new Error('Container not ready');
-    }
+    if (!isReady) throw new Error('Container not ready');
 
     const response = await fetch('/api/playground/sync', {
       method: 'POST',
@@ -80,17 +192,12 @@ export function useContainerSession(): UseContainerSessionResult {
     });
 
     const data = await response.json();
-
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to sync files');
-    }
+    if (!data.success) throw new Error(data.error || 'Failed to sync files');
   }, [sessionId, isReady]);
 
   // Install package
   const installPackage = useCallback(async (packageName: string) => {
-    if (!isReady) {
-      throw new Error('Container not ready');
-    }
+    if (!isReady) throw new Error('Container not ready');
 
     const response = await fetch('/api/playground/install', {
       method: 'POST',
@@ -99,7 +206,6 @@ export function useContainerSession(): UseContainerSessionResult {
     });
 
     const data = await response.json();
-
     return {
       success: data.success,
       output: data.output || data.error || '',
@@ -108,9 +214,7 @@ export function useContainerSession(): UseContainerSessionResult {
 
   // Execute code
   const executeCode = useCallback(async (code: string, filename = 'index.js') => {
-    if (!isReady) {
-      throw new Error('Container not ready');
-    }
+    if (!isReady) throw new Error('Container not ready');
 
     const response = await fetch('/api/playground/execute', {
       method: 'POST',
@@ -119,7 +223,6 @@ export function useContainerSession(): UseContainerSessionResult {
     });
 
     const data = await response.json();
-
     return {
       success: data.success,
       output: data.output || '',
@@ -135,6 +238,7 @@ export function useContainerSession(): UseContainerSessionResult {
       });
       setIsReady(false);
       setContainerId(null);
+      setProjectType(null);
     } catch (err) {
       console.error('Failed to destroy session:', err);
     }
@@ -145,7 +249,12 @@ export function useContainerSession(): UseContainerSessionResult {
     containerId,
     isReady,
     isCreating,
+    isExtended,
+    projectType,
     error,
+    createSession,
+    extendSession,
+    refreshFiles,
     syncFiles,
     installPackage,
     executeCode,

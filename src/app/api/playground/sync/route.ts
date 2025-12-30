@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import { join, dirname } from 'path';
+import { writeFileInContainer } from '@/lib/playground/docker-manager';
 import type { FileNode } from '@/lib/playground/project';
 
 /**
@@ -19,32 +18,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const workspaceDir = `/tmp/playground-${sessionId}`;
-
-    // Recursively write files
-    async function writeFiles(fileNodes: FileNode[], basePath: string) {
+    // Recursively sync files to container
+    async function syncFilesRecursive(fileNodes: FileNode[], currentPath = '') {
       for (const node of fileNodes) {
-        const nodePath = join(basePath, node.name);
+        const nodePath = currentPath ? `${currentPath}/${node.name}` : node.name;
 
-        if (node.type === 'folder') {
-          await mkdir(nodePath, { recursive: true });
-          if (node.children) {
-            await writeFiles(node.children, nodePath);
-          }
+        if (node.type === 'folder' && node.children) {
+          await syncFilesRecursive(node.children, nodePath);
         } else if (node.type === 'file' && node.content !== undefined) {
-          await mkdir(dirname(nodePath), { recursive: true });
-          await writeFile(nodePath, node.content, 'utf-8');
+          await writeFileInContainer(sessionId, nodePath, node.content);
         }
       }
     }
 
-    await mkdir(workspaceDir, { recursive: true });
-    await writeFiles(files, workspaceDir);
+    await syncFilesRecursive(files);
 
     return NextResponse.json({
       success: true,
-      message: 'Files synchronized',
-      path: workspaceDir,
+      message: 'Files synchronized successfully to Docker volume',
     });
   } catch (error) {
     console.error('File sync error:', error);

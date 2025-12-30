@@ -1,9 +1,4 @@
-/**
- * Docker Container Manager for Playground
- *
- * Manages isolated Docker containers for each playground session
- * with automatic cleanup and resource limits
- */
+import { spawn, execSync } from 'child_process';
 
 export interface ContainerSession {
   id: string;
@@ -13,77 +8,353 @@ export interface ContainerSession {
   timeout: NodeJS.Timeout;
 }
 
-// Store active sessions (in production, use Redis)
-const activeSessions = new Map<string, ContainerSession>();
-
 // Configuration
 const CONTAINER_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+const EXTENSION_TIMEOUT = 10 * 60 * 1000; // 10 minutes extension
 const CONTAINER_IMAGE = 'node:20-alpine';
+
+export interface ContainerSession {
+  id: string;
+  containerId: string;
+  createdAt: Date;
+  lastAccessed: Date;
+  timeout: NodeJS.Timeout;
+  isExtended: boolean;
+  projectType: 'js' | 'ts';
+}
+
+/**
+ * Singleton pattern for development (persists across HMR reloads)
+ */
+const globalForPlayground = global as unknown as {
+  activeSessions: Map<string, ContainerSession>;
+  isDockerAvailable: boolean | null;
+};
+
+const activeSessions = globalForPlayground.activeSessions || new Map<string, ContainerSession>();
+if (process.env.NODE_ENV !== 'production') {
+  globalForPlayground.activeSessions = activeSessions;
+}
+
+let isDockerAvailable = globalForPlayground.isDockerAvailable !== undefined ? globalForPlayground.isDockerAvailable : null;
+if (process.env.NODE_ENV !== 'production') {
+  globalForPlayground.isDockerAvailable = isDockerAvailable;
+}
+
+/**
+ * Check if Docker is available on the system
+ */
+async function checkDockerAvailability(): Promise<boolean> {
+  if (isDockerAvailable === true) return true;
+
+  try {
+    // Check if daemon is responsive
+    execSync('docker ps', { stdio: 'ignore', timeout: 2000 });
+    isDockerAvailable = true;
+    if (process.env.NODE_ENV !== 'production') {
+      globalForPlayground.isDockerAvailable = true;
+    }
+    console.log('✅ [Playground] Docker daemon detected and accessible');
+    return true;
+  } catch (error) {
+    if (isDockerAvailable === null) {
+      console.error('❌ [Playground] Docker daemon not responsive. Falling back to simulation.');
+    }
+    isDockerAvailable = false;
+    if (process.env.NODE_ENV !== 'production') {
+      globalForPlayground.isDockerAvailable = false;
+    }
+    return false;
+  }
+}
 
 /**
  * Create a new playground container
  */
-export async function createContainer(sessionId: string): Promise<string> {
+export async function createContainer(sessionId: string, projectType: 'js' | 'ts' = 'ts'): Promise<string> {
   try {
-    // Check if Docker is available
-    const { spawn } = await import('child_process');
+    const hasDocker = await checkDockerAvailability();
 
-    // Create container with resource limits
+    if (!hasDocker) {
+      return createSimulationSession(sessionId, projectType);
+    }
+
     const containerName = `servcraft-playground-${sessionId}`;
+    const volumeName = `servcraft-vol-${sessionId}`;
+
+    /**
+     * CRITICAL: Setup session BEFORE spawning docker to avoid race conditions.
+     */
+    setupSession(sessionId, 'starting...', projectType);
+
+    // Clean up any legacy resources
+    try {
+      execSync(`docker rm -f ${containerName}`, { stdio: 'ignore' });
+    } catch (e) {}
 
     const dockerArgs = [
-      'run',
-      '-d', // Detached
+      'run', '-d',
       '--name', containerName,
-      '--rm', // Auto-remove when stopped
-      '-m', '512m', // Memory limit
-      '--cpus', '0.5', // CPU limit
-      '--network', 'none', // No network access for security
-      '-v', `/tmp/playground-${sessionId}:/workspace`, // Volume mount
+      '--rm',
+      '-m', '512m',
+      '--cpus', '0.5',
+      '--network', 'bridge', // Changed from none to allow npm install
+      '-v', `${volumeName}:/workspace`,
       CONTAINER_IMAGE,
-      'sleep', 'infinity' // Keep container running
+      'sleep', 'infinity'
     ];
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const docker = spawn('docker', dockerArgs);
-
       let containerId = '';
 
-      docker.stdout.on('data', (data) => {
-        containerId += data.toString();
-      });
+      docker.stdout.on('data', (data) => { containerId += data.toString(); });
 
-      docker.stderr.on('data', (data) => {
-        console.error('Docker error:', data.toString());
-      });
-
-      docker.on('close', (code) => {
+      docker.on('close', async (code) => {
         if (code === 0) {
           const cleanId = containerId.trim();
+          const existing = activeSessions.get(sessionId);
+          if (existing) {
+            existing.containerId = cleanId;
+          } else {
+            setupSession(sessionId, cleanId, projectType);
+          }
 
-          // Setup auto-cleanup
-          const timeout = setTimeout(() => {
-            cleanupContainer(sessionId);
-          }, CONTAINER_TIMEOUT);
-
-          activeSessions.set(sessionId, {
-            id: sessionId,
-            containerId: cleanId,
-            createdAt: new Date(),
-            lastAccessed: new Date(),
-            timeout,
-          });
+          // IMPORTANT: Wait for project initialization to complete before resolving
+          console.log(`[Playground] Container ${cleanId} created, starting project initialization...`);
+          await initializeProject(sessionId, projectType);
+          console.log(`[Playground] Project initialization complete, container ready`);
 
           resolve(cleanId);
         } else {
-          reject(new Error(`Docker failed with code ${code}`));
+          console.error(`Docker creation failed: code ${code}`);
+          resolve(createSimulationSession(sessionId, projectType));
         }
+      });
+
+      docker.on('error', (err) => {
+        console.error('Docker spawn error:', err);
+        resolve(createSimulationSession(sessionId, projectType));
       });
     });
   } catch (error) {
     console.error('Failed to create container:', error);
-    throw error;
+    return createSimulationSession(sessionId, projectType);
   }
+}
+
+/**
+ * Initialize the project inside the container
+ */
+async function initializeProject(sessionId: string, projectType: 'js' | 'ts') {
+  console.log(`🚀 [Playground] Initializing ${projectType} project for session ${sessionId}`);
+
+  // Use -y flag to skip interactive prompts and provide the project name as argument
+  const initCmd = projectType === 'ts'
+    ? 'npx -y servcraft init playground-app -y --ts --db none && mv playground-app/* playground-app/.* . 2>/dev/null || true && rm -rf playground-app'
+    : 'npx -y servcraft init playground-app -y --js --db none && mv playground-app/* playground-app/.* . 2>/dev/null || true && rm -rf playground-app';
+
+  try {
+    const result = await execInContainer(sessionId, `cd /workspace && ${initCmd}`);
+
+    console.log(`[Playground] Init command exit code: ${result.exitCode}`);
+    console.log(`[Playground] Init stdout:`, result.stdout.substring(0, 500));
+    console.log(`[Playground] Init stderr:`, result.stderr.substring(0, 500));
+
+    if (result.exitCode !== 0) {
+      console.error(`❌ [Playground] Project init failed for ${sessionId}: ${result.stderr}`);
+    } else {
+      console.log(`✅ [Playground] Project initialized for session ${sessionId}`);
+
+      // Verify files were created
+      const verifyResult = await execInContainer(sessionId, 'cd /workspace && ls -la');
+      console.log(`[Playground] Files after init:`, verifyResult.stdout);
+    }
+  } catch (err) {
+    console.error(`❌ [Playground] Project init error for ${sessionId}:`, err);
+  }
+}
+
+/**
+ * Extend session timeout
+ */
+export async function extendSession(sessionId: string): Promise<boolean> {
+  const session = activeSessions.get(sessionId);
+  if (!session || session.isExtended) return false;
+
+  clearTimeout(session.timeout);
+
+  session.isExtended = true;
+  session.timeout = setTimeout(() => {
+    cleanupContainer(sessionId).catch(console.error);
+  }, EXTENSION_TIMEOUT);
+
+  console.log(`⏳ [Playground] Session ${sessionId} extended by 10 minutes`);
+  return true;
+}
+
+/**
+ * Helper to setup session metadata
+ */
+function setupSession(sessionId: string, containerId: string, projectType: 'js' | 'ts' = 'ts') {
+  const existing = activeSessions.get(sessionId);
+  if (existing) {
+    clearTimeout(existing.timeout);
+  }
+
+  const timeout = setTimeout(() => {
+    cleanupContainer(sessionId).catch(console.error);
+  }, CONTAINER_TIMEOUT);
+
+  activeSessions.set(sessionId, {
+    id: sessionId,
+    containerId,
+    createdAt: existing?.createdAt || new Date(),
+    lastAccessed: new Date(),
+    timeout,
+    isExtended: existing?.isExtended || false,
+    projectType,
+  });
+}
+
+/**
+ * Read the directory structure from the container with file contents
+ */
+export async function readFilesFromContainer(sessionId: string): Promise<any[]> {
+  const session = activeSessions.get(sessionId);
+  if (!session || session.containerId.startsWith('sim-')) {
+    console.log('[readFilesFromContainer] Session not found or in simulation mode');
+    return [];
+  }
+
+  console.log(`[readFilesFromContainer] Reading files for session ${sessionId}`);
+
+  // Alpine Linux doesn't support -printf, so we use a simpler approach
+  const command = `find . -maxdepth 4 -not -path '*/.*' -not -path '*/node_modules/*' -not -name 'node_modules' | sed 's|^./||'`;
+
+  try {
+    const result = await execInContainer(sessionId, `cd /workspace && ${command}`);
+
+    console.log(`[readFilesFromContainer] Exit code: ${result.exitCode}`);
+    console.log(`[readFilesFromContainer] Stdout length: ${result.stdout.length}`);
+
+    if (result.exitCode !== 0) {
+      console.error('[readFilesFromContainer] Command failed:', result.stderr);
+      return [];
+    }
+
+    const lines = result.stdout
+      .split('\n')
+      .filter(l => l.trim() && l !== '.')
+      .map(l => l.trim());
+
+    console.log(`[readFilesFromContainer] Found ${lines.length} entries`);
+
+    // Read content for each file
+    const filesWithContent = await Promise.all(
+      lines.map(async (line) => {
+        const isFile = line.includes('.') && !line.endsWith('/');
+
+        if (isFile) {
+          try {
+            const contentResult = await execInContainer(sessionId, `cd /workspace && cat "${line}"`);
+            return {
+              name: line.split('/').pop() || line,
+              type: 'file' as const,
+              path: line,
+              content: contentResult.exitCode === 0 ? contentResult.stdout : '',
+              language: getLanguageFromExtension(line)
+            };
+          } catch (err) {
+            console.error(`[readFilesFromContainer] Failed to read ${line}:`, err);
+            return {
+              name: line.split('/').pop() || line,
+              type: 'file' as const,
+              path: line,
+              content: '',
+              language: getLanguageFromExtension(line)
+            };
+          }
+        } else {
+          return {
+            name: line.split('/').pop() || line,
+            type: 'folder' as const,
+            path: line
+          };
+        }
+      })
+    );
+
+    console.log(`[readFilesFromContainer] Read content for ${filesWithContent.filter(f => f.type === 'file').length} files`);
+    return filesWithContent;
+  } catch (err) {
+    console.error('[readFilesFromContainer] Error:', err);
+    return [];
+  }
+}
+
+/**
+ * Helper to determine language from file extension
+ */
+function getLanguageFromExtension(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  const languageMap: Record<string, string> = {
+    'js': 'javascript',
+    'ts': 'typescript',
+    'json': 'json',
+    'md': 'markdown',
+    'yml': 'yaml',
+    'yaml': 'yaml',
+    'env': 'plaintext',
+    'txt': 'plaintext',
+    'sh': 'shell',
+    'dockerfile': 'dockerfile'
+  };
+  return languageMap[ext || ''] || 'plaintext';
+}
+
+/**
+ * Write a file directly into the container
+ */
+export async function writeFileInContainer(
+  sessionId: string,
+  filePath: string,
+  content: string
+): Promise<void> {
+  // Retry mechanism to wait for session registration
+  let session = activeSessions.get(sessionId);
+  if (!session) {
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      session = activeSessions.get(sessionId);
+      if (session) break;
+    }
+  }
+
+  if (!session) throw new Error(`Session ${sessionId} not found`);
+
+  // Wait for container to be fully created
+  if (session.containerId === 'starting...') {
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      if (session.containerId !== 'starting...') break;
+    }
+  }
+
+  if (session.containerId.startsWith('sim-')) return;
+
+  const base64Content = Buffer.from(content).toString('base64');
+  const dirPath = filePath.split('/').slice(0, -1).join('/');
+
+  const command = dirPath
+    ? `mkdir -p "/workspace/${dirPath}" && echo "${base64Content}" | base64 -d > "/workspace/${filePath}"`
+    : `echo "${base64Content}" | base64 -d > "/workspace/${filePath}"`;
+
+  return new Promise((resolve, reject) => {
+    const dockerShell = spawn('docker', ['exec', session.containerId, 'sh', '-c', command]);
+    dockerShell.on('close', (code) => code === 0 ? resolve() : reject(new Error(`Write failed: ${code}`)));
+    dockerShell.on('error', reject);
+  });
 }
 
 /**
@@ -93,101 +364,72 @@ export async function execInContainer(
   sessionId: string,
   command: string
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const session = activeSessions.get(sessionId);
+  let session = activeSessions.get(sessionId);
+  if (!session) throw new Error('Session not found');
 
-  if (!session) {
-    throw new Error('Session not found');
-  }
-
-  // Update last accessed time
   session.lastAccessed = new Date();
 
-  const { spawn } = await import('child_process');
+  if (session.containerId.startsWith('sim-')) {
+    return {
+      stdout: `[Simulation Mode] Executed: ${command}`,
+      stderr: '',
+      exitCode: 0,
+    };
+  }
 
   return new Promise((resolve, reject) => {
-    const docker = spawn('docker', [
-      'exec',
-      session.containerId,
-      'sh',
-      '-c',
-      command,
-    ]);
-
+    const dockerExec = spawn('docker', ['exec', session.containerId, 'sh', '-c', command]);
     let stdout = '';
     let stderr = '';
 
-    docker.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    docker.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    docker.on('close', (exitCode) => {
-      resolve({ stdout, stderr, exitCode: exitCode || 0 });
-    });
-
-    docker.on('error', reject);
+    dockerExec.stdout.on('data', (d) => { stdout += d; });
+    dockerExec.stderr.on('data', (d) => { stderr += d; });
+    dockerExec.on('close', (c) => resolve({ stdout, stderr, exitCode: c || 0 }));
+    dockerExec.on('error', reject);
   });
 }
 
 /**
- * Cleanup container and associated resources
+ * Cleanup container and volume
  */
 export async function cleanupContainer(sessionId: string): Promise<void> {
   const session = activeSessions.get(sessionId);
-
-  if (!session) {
-    return;
-  }
+  if (!session) return;
 
   try {
-    // Clear timeout
     clearTimeout(session.timeout);
 
-    // Stop container (will be auto-removed due to --rm flag)
-    const { spawn } = await import('child_process');
+    if (!session.containerId.startsWith('sim-')) {
+      const containerName = `servcraft-playground-${sessionId}`;
+      const volumeName = `servcraft-vol-${sessionId}`;
 
-    await new Promise<void>((resolve, reject) => {
-      const docker = spawn('docker', ['stop', session.containerId]);
-
-      docker.on('close', (code) => {
-        if (code === 0 || code === 1) { // 1 = container already stopped
-          resolve();
-        } else {
-          reject(new Error(`Failed to stop container: ${code}`));
-        }
+      await new Promise<void>((resolve) => {
+        const stop = spawn('docker', ['stop', containerName]);
+        stop.on('close', () => resolve());
       });
 
-      docker.on('error', reject);
-    });
+      await new Promise<void>((resolve) => {
+        const rmv = spawn('docker', ['volume', 'rm', volumeName]);
+        rmv.on('close', () => resolve());
+      });
+    }
 
-    // Remove session
     activeSessions.delete(sessionId);
-
-    console.log(`Cleaned up container for session ${sessionId}`);
+    console.log(`🧹 [Playground] Cleaned up session ${sessionId}`);
   } catch (error) {
     console.error('Failed to cleanup container:', error);
   }
 }
 
-/**
- * Get container status
- */
 export function getContainerStatus(sessionId: string): ContainerSession | null {
   return activeSessions.get(sessionId) || null;
 }
 
-/**
- * Cleanup all containers on shutdown
- */
 export async function cleanupAllContainers(): Promise<void> {
   const sessions = Array.from(activeSessions.keys());
   await Promise.all(sessions.map(cleanupContainer));
 }
 
-// Cleanup on process exit
 if (typeof process !== 'undefined') {
   process.on('SIGINT', cleanupAllContainers);
   process.on('SIGTERM', cleanupAllContainers);

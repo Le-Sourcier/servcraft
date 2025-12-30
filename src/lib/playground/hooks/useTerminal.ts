@@ -65,17 +65,16 @@ export function useTerminal({
 
   // Add terminal output
   const addTerminalOutput = useCallback((output: string[], type: TerminalCommand['type'] = 'output', command = "") => {
-    setTerminalIdCounter(prev => {
-      const newId = prev;
-      setTerminalCommands(cmds => [...cmds, {
-        id: `cmd-${newId}`,
-        command,
-        output,
-        timestamp: new Date(),
-        type
-      }]);
-      return prev + 1;
-    });
+    const timestamp = new Date();
+    const uniqueId = `cmd-${timestamp.getTime()}-${Math.random().toString(36).slice(2, 7)}`;
+
+    setTerminalCommands(cmds => [...cmds, {
+      id: uniqueId,
+      command,
+      output,
+      timestamp,
+      type
+    }]);
   }, []);
 
   // Execute terminal command
@@ -118,16 +117,13 @@ export function useTerminal({
         break;
 
       case "clear":
-        setTerminalIdCounter(prev => {
-          setTerminalCommands([{
-            id: `init-${prev}`,
-            command: "",
-            output: ["Terminal cleared. Type 'help' for commands."],
-            timestamp: new Date(),
-            type: "system"
-          }]);
-          return prev + 1;
-        });
+        setTerminalCommands([{
+          id: `init-${Date.now()}`,
+          command: "",
+          output: ["Terminal cleared. Type 'help' for commands."],
+          timestamp: new Date(),
+          type: "system"
+        }]);
         break;
 
       case "npm":

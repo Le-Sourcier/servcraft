@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createContainer, cleanupContainer, getContainerStatus } from '@/lib/playground/docker-manager';
+import { createContainer, cleanupContainer, getContainerStatus, extendSession } from '@/lib/playground/docker-manager';
 
 /**
  * POST /api/playground/container
@@ -8,7 +8,7 @@ import { createContainer, cleanupContainer, getContainerStatus } from '@/lib/pla
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sessionId } = body;
+    const { sessionId, projectType = 'ts' } = body;
 
     if (!sessionId) {
       return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
@@ -22,22 +22,58 @@ export async function POST(request: NextRequest) {
         containerId: existingSession.containerId,
         message: 'Container already exists',
         existing: true,
+        projectType: existingSession.projectType,
+        isExtended: existingSession.isExtended
       });
     }
 
     // Create new container
-    const containerId = await createContainer(sessionId);
+    const containerId = await createContainer(sessionId, projectType as 'js' | 'ts');
+
+    const isSimulation = containerId.startsWith('sim-');
 
     return NextResponse.json({
       success: true,
       containerId,
-      message: 'Container created successfully',
-      timeout: 30 * 60 * 1000, // 30 minutes
+      message: isSimulation
+        ? 'Docker not found. Started in simulation mode.'
+        : 'Container created successfully',
+      isSimulation,
+      projectType,
+      timeout: 30 * 60 * 1000,
     });
   } catch (error) {
     console.error('Container creation error:', error);
     return NextResponse.json(
       { error: 'Failed to create container', details: String(error) },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * PATCH /api/playground/container
+ * Extends session timeout
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { sessionId } = body;
+
+    if (!sessionId) {
+      return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
+    }
+
+    const extended = await extendSession(sessionId);
+
+    return NextResponse.json({
+      success: extended,
+      message: extended ? 'Session extended by 10 minutes' : 'Session already extended or not found',
+    });
+  } catch (error) {
+    console.error('Session extension error:', error);
+    return NextResponse.json(
+      { error: 'Failed to extend session' },
       { status: 500 }
     );
   }
