@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from 'next';
 import Link from "next/link";
 import { Github, Package, Heart } from "lucide-react";
 
@@ -83,7 +84,7 @@ export function Footer() {
               {footerLinks.product.map((link) => (
                 <li key={link.label}>
                   <Link
-                    href={link.href}
+                    href={link.href as Route}
                     className="text-muted-foreground hover:text-foreground text-sm transition-colors duration-200"
                   >
                     {link.label}
@@ -100,7 +101,7 @@ export function Footer() {
               {footerLinks.documentation.map((link) => (
                 <li key={link.label}>
                   <Link
-                    href={link.href}
+                    href={link.href as Route}
                     className="text-muted-foreground hover:text-foreground text-sm transition-colors duration-200"
                   >
                     {link.label}

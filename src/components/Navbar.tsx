@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from 'next';
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -253,7 +254,7 @@ export function Navbar() {
                           transition={{ delay: index * 0.03 }}
                         >
                           <Link
-                            href={link.href}
+                            href={link.href as Route}
                             onClick={() => setIsDocDropdownOpen(false)}
                             className="flex items-start gap-3 p-3 rounded-lg hover:bg-secondary/50 transition-colors group"
                           >
@@ -305,7 +306,7 @@ export function Navbar() {
                 transition={{ delay: index * 0.05 + 0.25 }}
               >
                 <Link
-                  href={item.href}
+                  href={item.href as Route}
                   className="group flex items-center gap-2 px-4 py-2 rounded-lg text-muted-foreground hover:text-foreground transition-all duration-200 text-sm font-medium"
                 >
                   <item.icon className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
@@ -400,7 +401,7 @@ export function Navbar() {
                   transition={{ delay: index * 0.05 }}
                 >
                   <Link
-                    href={item.href}
+                    href={item.href as Route}
                     onClick={() => setIsMobileMenuOpen(false)}
                     className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/5 transition-all duration-200"
                   >

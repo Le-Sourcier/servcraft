@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from 'next';
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Home, ArrowLeft, Search } from "lucide-react";
@@ -64,7 +65,7 @@ export default function NotFound() {
               ].map((link) => (
                 <Link
                   key={link.href}
-                  href={link.href}
+                  href={link.href as Route}
                   className="px-3 py-1.5 rounded-lg text-sm bg-secondary hover:bg-secondary/80 transition-colors"
                 >
                   {link.label}

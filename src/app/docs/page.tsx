@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from 'next';
 import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -148,7 +149,7 @@ cd my-api && npm run dev`}
                 transition={{ delay: index * 0.1 }}
               >
                 <Link
-                  href={section.href}
+                  href={section.href as Route}
                   className="group block p-6 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 h-full"
                 >
                   <div className="flex items-start gap-4">

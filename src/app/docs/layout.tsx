@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from 'next';
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -32,7 +33,19 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/Button";
 
-const sidebarSections = [
+interface SidebarItem {
+  href: Route;
+  label: string;
+  icon: any;
+  highlight?: boolean;
+}
+
+interface SidebarSection {
+  title: string;
+  items: SidebarItem[];
+}
+
+const sidebarSections: SidebarSection[] = [
   {
     title: "Getting Started",
     items: [
@@ -67,7 +80,18 @@ const sidebarSections = [
   },
 ];
 
-const searchContents = [
+interface SearchItem {
+  title: string;
+  href: Route;
+  desc: string;
+}
+
+interface SearchSection {
+  category: string;
+  items: SearchItem[];
+}
+
+const searchContents: SearchSection[] = [
   { category: "Getting Started", items: [
     { title: "Installation", href: "/docs/getting-started", desc: "How to install ServCraft CLI" },
     { title: "Quick Start", href: "/quickstart", desc: "Create your first project in 5 minutes" },
@@ -286,7 +310,7 @@ export default function DocsLayout({
                             return (
                               <Link
                                 key={item.href}
-                                href={item.href}
+                                href={item.href as Route}
                                 onClick={() => {
                                   setIsSearchOpen(false);
                                   setSearchQuery("");
@@ -349,7 +373,7 @@ export default function DocsLayout({
                             return (
                               <Link
                                 key={item.href}
-                                href={item.href}
+                                href={item.href as Route}
                                 onClick={() => {
                                   setIsSearchOpen(false);
                                   setSearchQuery("");
@@ -550,7 +574,7 @@ function SidebarContent({
                 return (
                   <li key={item.href}>
                     <Link
-                      href={item.href}
+                      href={item.href as Route}
                       onClick={onClose}
                       className={cn(
                         "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200",

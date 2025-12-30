@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from 'next';
 import { motion } from "framer-motion";
 import {
   Terminal,
@@ -504,12 +505,12 @@ npm run dev
           </motion.div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
+            {( [
               { icon: Database, title: "Project Structure", href: "/docs/structure", desc: "Learn the project layout" },
               { icon: Shield, title: "Authentication", href: "/docs/auth", desc: "Set up auth module" },
               { icon: Code2, title: "CLI Reference", href: "/docs/cli", desc: "Explore all commands" },
               { icon: Globe, title: "Modules", href: "/modules", desc: "Add more features" },
-            ].map((item, index) => (
+            ] as const).map((item, index) => (
               <motion.div
                 key={item.title}
                 initial={{ opacity: 0, y: 20 }}
@@ -518,7 +519,7 @@ npm run dev
                 transition={{ delay: index * 0.1 }}
               >
                 <Link
-                  href={item.href}
+                  href={item.href as Route}
                   className="block p-6 rounded-xl bg-card border border-border hover:border-primary/50 transition-all duration-300 text-center group"
                 >
                   <item.icon className="w-8 h-8 text-primary mx-auto mb-3 group-hover:scale-110 transition-transform" />

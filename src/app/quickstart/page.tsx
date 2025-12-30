@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from 'next';
 import { motion } from "framer-motion";
 import {
   Terminal,
@@ -382,7 +383,7 @@ npm run dev
                 transition={{ delay: index * 0.1 }}
               >
                 <Link
-                  href={item.href}
+                  href={item.href as Route}
                   className="block p-6 rounded-xl bg-card border border-border hover:border-primary/50 transition-all duration-300 text-center group"
                 >
                   <item.icon className="w-8 h-8 text-primary mx-auto mb-3 group-hover:scale-110 transition-transform" />
