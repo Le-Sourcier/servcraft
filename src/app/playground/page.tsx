@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Editor from "@monaco-editor/react";
 import {
   Terminal,
   Play,
@@ -106,118 +107,6 @@ function getFileIconComponent(filename: string, isFolder = false, isExpanded = f
   return { iconName, IconComponent: () => <FileIcon name={iconName} /> };
 }
 
-// Simple syntax highlighter for TypeScript/JavaScript
-function highlightCode(code: string, _language: string): string {
-  if (!code) return "";
-
-  // Escape HTML first
-  let escaped = code
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-
-  // Tokenize the code to avoid overlapping replacements
-  interface Token {
-    type: 'text' | 'comment' | 'string' | 'keyword' | 'type' | 'number' | 'function';
-    value: string;
-  }
-
-  const lines = escaped.split('\n');
-  const result: string[] = [];
-
-  for (const line of lines) {
-    let remaining = line;
-    const tokens: Token[] = [];
-
-    while (remaining.length > 0) {
-      let matched = false;
-
-      // Try to match comment
-      if (remaining.startsWith('//')) {
-        tokens.push({ type: 'comment', value: remaining });
-        remaining = '';
-        matched = true;
-        continue;
-      }
-
-      // Try to match strings
-      const stringMatch = remaining.match(/^("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/);
-      if (stringMatch) {
-        tokens.push({ type: 'string', value: stringMatch[0] });
-        remaining = remaining.slice(stringMatch[0].length);
-        matched = true;
-        continue;
-      }
-
-      // Try to match numbers
-      const numberMatch = remaining.match(/^\d+\.?\d*/);
-      if (numberMatch) {
-        tokens.push({ type: 'number', value: numberMatch[0] });
-        remaining = remaining.slice(numberMatch[0].length);
-        matched = true;
-        continue;
-      }
-
-      // Try to match keywords
-      const keywordMatch = remaining.match(/^(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|import|export|from|async|await|try|catch|throw|new|class|extends|typeof|instanceof|this|static|public|private|protected|readonly)\b/);
-      if (keywordMatch) {
-        tokens.push({ type: 'keyword', value: keywordMatch[0] });
-        remaining = remaining.slice(keywordMatch[0].length);
-        matched = true;
-        continue;
-      }
-
-      // Try to match types
-      const typeMatch = remaining.match(/^(string|number|boolean|void|null|undefined|any|never|unknown|interface|type|enum|true|false)\b/);
-      if (typeMatch) {
-        tokens.push({ type: 'type', value: typeMatch[0] });
-        remaining = remaining.slice(typeMatch[0].length);
-        matched = true;
-        continue;
-      }
-
-      // Try to match function calls
-      const functionMatch = remaining.match(/^[a-zA-Z_$][a-zA-Z0-9_$]*(?=\()/);
-      if (functionMatch) {
-        tokens.push({ type: 'function', value: functionMatch[0] });
-        remaining = remaining.slice(functionMatch[0].length);
-        matched = true;
-        continue;
-      }
-
-      // No match, take one character as text
-      if (!matched) {
-        tokens.push({ type: 'text', value: remaining[0] });
-        remaining = remaining.slice(1);
-      }
-    }
-
-    // Convert tokens to HTML
-    const lineHtml = tokens.map(token => {
-      switch (token.type) {
-        case 'comment':
-          return `<span class="text-muted-foreground">${token.value}</span>`;
-        case 'string':
-          return `<span class="text-green-400">${token.value}</span>`;
-        case 'keyword':
-          return `<span class="text-primary font-semibold">${token.value}</span>`;
-        case 'type':
-          return `<span class="text-cyan-400">${token.value}</span>`;
-        case 'number':
-          return `<span class="text-orange-400">${token.value}</span>`;
-        case 'function':
-          return `<span class="text-yellow-300">${token.value}</span>`;
-        default:
-          return token.value;
-      }
-    }).join('');
-
-    result.push(lineHtml);
-  }
-
-  return result.join('\n');
-}
-
 // Available packages
 const PACKAGES = availablePackages;
 
@@ -253,10 +142,6 @@ export default function PlaygroundPage() {
   const [terminalInput, setTerminalInput] = useState("");
   const terminalRef = useRef<HTMLDivElement>(null);
   const [terminalIdCounter, setTerminalIdCounter] = useState(1);
-  const editorRef = useRef<HTMLTextAreaElement>(null);
-  const highlightRef = useRef<HTMLPreElement>(null);
-  const editorContainerRef = useRef<HTMLDivElement>(null);
-  const lineNumbersRef = useRef<HTMLDivElement>(null);
 
   // Persist playground state
   const { resetPlayground } = usePlaygroundPersistence(
@@ -979,108 +864,32 @@ export default ${mod.name}Controller;
           {/* Editor */}
           <div className="flex-1 relative overflow-hidden">
             {selectedFile ? (
-              <div className="absolute inset-0 flex">
-                {/* Line numbers */}
-                <div
-                  ref={lineNumbersRef}
-                  className="w-10 bg-[#181825] border-r border-[#313244] py-4 px-2 text-xs text-muted-foreground font-mono leading-6 select-none text-right flex-shrink-0 overflow-hidden"
-                >
-                  {selectedFile.content?.split('\n').map((_, i) => (
-                    <div key={i} className="h-6">{i + 1}</div>
-                  ))}
-                </div>
-
-                {/* Code editor with syntax highlighting */}
-                <div
-                  className="flex-1 relative overflow-hidden"
-                  ref={editorContainerRef}
-                >
-                  {/* Syntax highlighted background */}
-                  <pre
-                    ref={highlightRef}
-                    className="absolute top-0 left-0 p-4 font-mono text-sm leading-6 whitespace-pre pointer-events-none"
-                    aria-hidden="true"
-                    dangerouslySetInnerHTML={{ __html: highlightCode(selectedFile.content || "", selectedFile.language || "typescript") }}
-                  />
-
-                  {/* Editable textarea with transparent text */}
-                  <textarea
-                    ref={editorRef}
-                    value={selectedFile.content || ""}
-                    onScroll={(e) => {
-                      // Sync container scroll with textarea scroll
-                      if (editorContainerRef.current && lineNumbersRef.current) {
-                        editorContainerRef.current.scrollTop = e.currentTarget.scrollTop;
-                        lineNumbersRef.current.scrollTop = e.currentTarget.scrollTop;
-                      }
-                    }}
-                    onChange={(e) => {
-                      const newContent = e.target.value;
-                      const path = getFilePath(selectedFile, files);
-                      updateFileContent(path, newContent);
-                      if (selectedFile && activeTabId) {
-                        setSelectedFile({ ...selectedFile, content: newContent });
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      // Handle Tab key
-                      if (e.key === 'Tab') {
-                        e.preventDefault();
-                        const start = e.currentTarget.selectionStart;
-                        const end = e.currentTarget.selectionEnd;
-                        const newContent =
-                          selectedFile.content!.substring(0, start) +
-                          '  ' +
-                          selectedFile.content!.substring(end);
-
-                        const path = getFilePath(selectedFile, files);
-                        updateFileContent(path, newContent);
-                        setSelectedFile({ ...selectedFile, content: newContent });
-
-                        // Set cursor position after tab
-                        setTimeout(() => {
-                          e.currentTarget.selectionStart = e.currentTarget.selectionEnd = start + 2;
-                        }, 0);
-                      }
-
-                      // Handle Enter key with auto-indent
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const start = e.currentTarget.selectionStart;
-                        const content = selectedFile.content || '';
-                        const lines = content.substring(0, start).split('\n');
-                        const currentLine = lines[lines.length - 1];
-                        const indent = currentLine.match(/^\s*/)?.[0] || '';
-
-                        const newContent =
-                          content.substring(0, start) +
-                          '\n' + indent +
-                          content.substring(start);
-
-                        const path = getFilePath(selectedFile, files);
-                        updateFileContent(path, newContent);
-                        setSelectedFile({ ...selectedFile, content: newContent });
-
-                        setTimeout(() => {
-                          e.currentTarget.selectionStart = e.currentTarget.selectionEnd = start + 1 + indent.length;
-                        }, 0);
-                      }
-                    }}
-                    className="absolute inset-0 w-full h-full p-4 font-mono text-sm resize-none focus:outline-none leading-6 whitespace-pre bg-transparent caret-white selection:bg-primary/30 border-0"
-                    style={{
-                      color: "transparent",
-                      WebkitTextFillColor: "transparent",
-                      tabSize: 2,
-                      outline: 'none',
-                      overflow: 'auto'
-                    }}
-                    spellCheck={false}
-                    autoCapitalize="off"
-                    autoCorrect="off"
-                    autoComplete="off"
-                  />
-                </div>
-              </div>
+              <Editor
+                height="100%"
+                defaultLanguage={selectedFile.language || "typescript"}
+                language={selectedFile.language || "typescript"}
+                value={selectedFile.content || ""}
+                onChange={(value) => {
+                  const newContent = value || "";
+                  const path = getFilePath(selectedFile, files);
+                  updateFileContent(path, newContent);
+                  if (selectedFile && activeTabId) {
+                    setSelectedFile({ ...selectedFile, content: newContent });
+                  }
+                }}
+                theme="vs-dark"
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 14,
+                  lineNumbers: "on",
+                  scrollBeyondLastLine: false,
+                  automaticLayout: true,
+                  tabSize: 2,
+                  insertSpaces: true,
+                  wordWrap: "off",
+                  padding: { top: 16, bottom: 16 },
+                }}
+              />
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 <div className="text-center">
