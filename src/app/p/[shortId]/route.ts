@@ -2,22 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getContainerStatus } from '@/lib/playground/docker-manager';
 
 /**
- * GET /api/playground/preview/[sessionId]
- * Reverse proxy to the container's running server
+ * GET /p/[shortId]
+ * Shortened preview URL - uses last 12 characters of sessionId
+ * Example: /p/xprao825hlk instead of /api/playground/preview/session-1767080834814-xprao825hlk
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ sessionId: string }> }
+  { params }: { params: Promise<{ shortId: string }> }
 ) {
   try {
-    const { sessionId } = await params;
+    const { shortId } = await params;
 
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
+    if (!shortId) {
+      return NextResponse.json({ error: 'Short ID required' }, { status: 400 });
     }
 
-    // Get session info
-    const session = getContainerStatus(sessionId);
+    // Find session by matching the end of the sessionId
+    const session = getContainerStatus(shortId);
 
     if (!session || !session.exposedPort) {
       return new NextResponse(
@@ -30,7 +31,7 @@ export async function GET(
     }
 
     // Proxy to the container's exposed port
-    const targetUrl = `http://localhost:${session.exposedPort}${request.nextUrl.pathname.replace(`/api/playground/preview/${sessionId}`, '')}`;
+    const targetUrl = `http://localhost:${session.exposedPort}${request.nextUrl.pathname.replace(`/p/${shortId}`, '')}`;
     const searchParams = request.nextUrl.searchParams.toString();
     const fullUrl = searchParams ? `${targetUrl}?${searchParams}` : targetUrl;
 
@@ -54,7 +55,7 @@ export async function GET(
         headers: response.headers,
       });
     } catch (error) {
-      console.error(`[Preview] Failed to proxy to container ${sessionId}:`, error);
+      console.error(`[Preview] Failed to proxy to container ${shortId}:`, error);
       return new NextResponse(
         `<html><body><h1>Service not ready</h1><p>The server is starting up. Please wait a few seconds and refresh.</p><p>Error: ${String(error)}</p></body></html>`,
         {

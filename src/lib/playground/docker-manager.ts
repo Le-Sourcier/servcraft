@@ -306,10 +306,27 @@ function setupSession(sessionId: string, containerId: string, projectType: 'js' 
  * Read the directory structure from the container with file contents
  */
 export async function readFilesFromContainer(sessionId: string): Promise<any[]> {
-  const session = activeSessions.get(sessionId);
+  let session = activeSessions.get(sessionId);
   if (!session || session.containerId.startsWith('sim-')) {
     console.log('[readFilesFromContainer] Session not found or in simulation mode');
     return [];
+  }
+
+  // Wait for container to be fully created
+  if (session.containerId === 'starting...') {
+    console.log('[readFilesFromContainer] Container is starting, waiting...');
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      session = activeSessions.get(sessionId);
+      if (session && session.containerId !== 'starting...') {
+        console.log('[readFilesFromContainer] Container ready!');
+        break;
+      }
+    }
+    if (!session || session.containerId === 'starting...') {
+      console.error('[readFilesFromContainer] Timeout waiting for container');
+      return [];
+    }
   }
 
   console.log(`[readFilesFromContainer] Reading files for session ${sessionId}`);
@@ -431,13 +448,33 @@ export async function writeFileInContainer(
   const base64Content = Buffer.from(content).toString('base64');
   const dirPath = filePath.split('/').slice(0, -1).join('/');
 
-  const command = dirPath
-    ? `mkdir -p "/workspace/${dirPath}" && echo "${base64Content}" | base64 -d > "/workspace/${filePath}"`
-    : `echo "${base64Content}" | base64 -d > "/workspace/${filePath}"`;
+  // Create directory first if needed
+  if (dirPath) {
+    await new Promise((resolve, reject) => {
+      const mkdirShell = spawn('docker', ['exec', session.containerId, 'mkdir', '-p', `/workspace/${dirPath}`]);
+      mkdirShell.on('close', (code) => code === 0 ? resolve(null) : reject(new Error(`mkdir failed: ${code}`)));
+      mkdirShell.on('error', reject);
+    });
+  }
 
+  // Write file using stdin to avoid shell escaping issues
   return new Promise((resolve, reject) => {
-    const dockerShell = spawn('docker', ['exec', session.containerId, 'sh', '-c', command]);
-    dockerShell.on('close', (code) => code === 0 ? resolve() : reject(new Error(`Write failed: ${code}`)));
+    const dockerShell = spawn('docker', ['exec', '-i', session.containerId, 'sh', '-c', `base64 -d > "/workspace/${filePath}"`]);
+
+    // Send base64 content via stdin
+    dockerShell.stdin.write(base64Content);
+    dockerShell.stdin.end();
+
+    let stderr = '';
+    dockerShell.stderr.on('data', (data) => stderr += data.toString());
+
+    dockerShell.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`Write failed: ${code}, stderr: ${stderr}`));
+      }
+    });
     dockerShell.on('error', reject);
   });
 }
@@ -506,8 +543,21 @@ export async function cleanupContainer(sessionId: string): Promise<void> {
   }
 }
 
-export function getContainerStatus(sessionId: string): ContainerSession | null {
-  return activeSessions.get(sessionId) || null;
+export function getContainerStatus(sessionIdOrShortId: string): ContainerSession | null {
+  // First try exact match
+  let session = activeSessions.get(sessionIdOrShortId);
+  if (session) return session;
+
+  // If not found, try to find by matching the suffix (short ID)
+  // Short ID is the part after the last dash
+  for (const [fullSessionId, sess] of activeSessions.entries()) {
+    const shortId = fullSessionId.split('-').pop();
+    if (shortId === sessionIdOrShortId) {
+      return sess;
+    }
+  }
+
+  return null;
 }
 
 export async function cleanupAllContainers(): Promise<void> {

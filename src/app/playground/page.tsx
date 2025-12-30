@@ -281,8 +281,9 @@ export default function PlaygroundPage() {
     addTerminalOutput(['Starting ServCraft service...'], 'system');
 
     try {
-      // Generate preview URL using the reverse proxy
-      const previewPath = `/api/playground/preview/${containerSession.sessionId}`;
+      // Generate short preview URL (extract the random suffix after last dash)
+      const shortId = containerSession.sessionId.split('-').pop() || containerSession.sessionId.slice(-12);
+      const previewPath = `/p/${shortId}`;
       const fullUrl = typeof window !== 'undefined'
         ? `${window.location.origin}${previewPath}`
         : previewPath;

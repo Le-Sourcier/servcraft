@@ -2,61 +2,61 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getContainerStatus } from '@/lib/playground/docker-manager';
 
 /**
- * Catch-all route for proxying to container
- * Handles paths like /api/playground/preview/{sessionId}/api/users
+ * Catch-all route for proxying to container with sub-paths
+ * Handles paths like /p/{shortId}/api/users
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ sessionId: string; path: string[] }> }
+  { params }: { params: Promise<{ shortId: string; path: string[] }> }
 ) {
-  const { sessionId, path } = await params;
-  return handleProxyRequest(request, sessionId, path);
+  const { shortId, path } = await params;
+  return handleProxyRequest(request, shortId, path);
 }
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ sessionId: string; path: string[] }> }
+  { params }: { params: Promise<{ shortId: string; path: string[] }> }
 ) {
-  const { sessionId, path } = await params;
-  return handleProxyRequest(request, sessionId, path);
+  const { shortId, path } = await params;
+  return handleProxyRequest(request, shortId, path);
 }
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ sessionId: string; path: string[] }> }
+  { params }: { params: Promise<{ shortId: string; path: string[] }> }
 ) {
-  const { sessionId, path } = await params;
-  return handleProxyRequest(request, sessionId, path);
+  const { shortId, path } = await params;
+  return handleProxyRequest(request, shortId, path);
 }
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ sessionId: string; path: string[] }> }
+  { params }: { params: Promise<{ shortId: string; path: string[] }> }
 ) {
-  const { sessionId, path } = await params;
-  return handleProxyRequest(request, sessionId, path);
+  const { shortId, path } = await params;
+  return handleProxyRequest(request, shortId, path);
 }
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ sessionId: string; path: string[] }> }
+  { params }: { params: Promise<{ shortId: string; path: string[] }> }
 ) {
-  const { sessionId, path } = await params;
-  return handleProxyRequest(request, sessionId, path);
+  const { shortId, path } = await params;
+  return handleProxyRequest(request, shortId, path);
 }
 
 async function handleProxyRequest(
   request: NextRequest,
-  sessionId: string,
+  shortId: string,
   path: string[]
 ) {
   try {
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
+    if (!shortId) {
+      return NextResponse.json({ error: 'Short ID required' }, { status: 400 });
     }
 
-    // Get session info
-    const session = getContainerStatus(sessionId);
+    // Get session info by matching the short ID
+    const session = getContainerStatus(shortId);
 
     if (!session || !session.exposedPort) {
       return new NextResponse(
@@ -92,7 +92,7 @@ async function handleProxyRequest(
         headers: proxyResponse.headers,
       });
     } catch (error) {
-      console.error(`[Preview] Proxy error for ${sessionId}:`, error);
+      console.error(`[Preview] Proxy error for ${shortId}:`, error);
       return new NextResponse(
         `<html><body><h1>Service not ready</h1><p>Server is starting. Refresh in a few seconds.</p></body></html>`,
         { status: 503, headers: { 'Content-Type': 'text/html' } }
