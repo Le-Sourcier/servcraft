@@ -30,6 +30,7 @@ export interface ContainerSession {
 const globalForPlayground = global as unknown as {
   activeSessions: Map<string, ContainerSession>;
   isDockerAvailable: boolean | null;
+  cleanupWorkerStarted?: boolean;
 };
 
 const activeSessions = globalForPlayground.activeSessions || new Map<string, ContainerSession>();
@@ -156,7 +157,10 @@ export async function createContainer(sessionId: string, projectType: 'js' | 'ts
     const hasDocker = await checkDockerAvailability();
 
     if (!hasDocker) {
-      return createSimulationSession(sessionId, projectType);
+      const simId = `sim-${Date.now()}`;
+      setupSession(sessionId, simId, projectType);
+      console.log('⚠️  [Playground] Docker not available, using simulation mode');
+      return simId;
     }
 
     const containerName = `servcraft-playground-${sessionId}`;
@@ -212,18 +216,24 @@ export async function createContainer(sessionId: string, projectType: 'js' | 'ts
           resolve(cleanId);
         } else {
           console.error(`Docker creation failed: code ${code}`);
-          resolve(createSimulationSession(sessionId, projectType));
+          const simId = `sim-${Date.now()}`;
+          setupSession(sessionId, simId, projectType);
+          resolve(simId);
         }
       });
 
       docker.on('error', (err) => {
         console.error('Docker spawn error:', err);
-        resolve(createSimulationSession(sessionId, projectType));
+        const simId = `sim-${Date.now()}`;
+        setupSession(sessionId, simId, projectType);
+        resolve(simId);
       });
     });
   } catch (error) {
     console.error('Failed to create container:', error);
-    return createSimulationSession(sessionId, projectType);
+    const simId = `sim-${Date.now()}`;
+    setupSession(sessionId, simId, projectType);
+    return simId;
   }
 }
 

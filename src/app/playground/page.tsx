@@ -455,7 +455,7 @@ export default function PlaygroundPage() {
                     className="group relative flex items-center gap-4 p-4 rounded-xl border border-[#313244] hover:border-primary/50 hover:bg-primary/5 transition-all text-left bg-[#181825] disabled:opacity-50"
                   >
                     <div className="w-10 h-10 rounded-lg bg-[#007acc]/10 flex items-center justify-center group-hover:bg-[#007acc]/20 transition-colors">
-                      <FileIcon name="typescript" className="w-6 h-6" />
+                      <FileIcon name="code" className="w-6 h-6" />
                     </div>
                     <div className="flex-1">
                       <div className="text-sm font-semibold text-white">TypeScript</div>
@@ -470,7 +470,7 @@ export default function PlaygroundPage() {
                     className="group relative flex items-center gap-4 p-4 rounded-xl border border-[#313244] hover:border-amber-500/50 hover:bg-amber-500/5 transition-all text-left bg-[#181825] disabled:opacity-50"
                   >
                     <div className="w-10 h-10 rounded-lg bg-[#f7df1e]/10 flex items-center justify-center group-hover:bg-[#f7df1e]/20 transition-colors">
-                      <FileIcon name="javascript" className="w-6 h-6" />
+                      <FileIcon name="file-code" className="w-6 h-6" />
                     </div>
                     <div className="flex-1">
                       <div className="text-sm font-semibold text-white">JavaScript</div>
