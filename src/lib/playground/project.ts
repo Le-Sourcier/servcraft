@@ -286,6 +286,7 @@ export const availablePackages: PackageDependency[] = [
   { name: 'fastify', version: '^4.28.0', installed: true },
   { name: '@fastify/cors', version: '^9.0.1', installed: true },
   { name: '@prisma/client', version: '^5.15.0', installed: true },
+  { name: 'express', version: '^4.19.2', installed: false },
   { name: 'zod', version: '^3.23.8', installed: false },
   { name: '@fastify/jwt', version: '^8.0.0', installed: false },
   { name: '@fastify/bcrypt', version: '^5.1.0', installed: false },
@@ -293,6 +294,15 @@ export const availablePackages: PackageDependency[] = [
   { name: '@fastify/websocket', version: '^10.0.0', installed: false },
   { name: 'ioredis', version: '^5.4.1', installed: false },
   { name: 'nodemailer', version: '^6.9.13', installed: false },
+  { name: 'axios', version: '^1.7.2', installed: false },
+  { name: 'dotenv', version: '^16.4.5', installed: false },
+  { name: 'bcrypt', version: '^5.1.1', installed: false },
+  { name: 'jsonwebtoken', version: '^9.0.2', installed: false },
+  { name: 'mongoose', version: '^8.4.1', installed: false },
+  { name: 'cors', version: '^2.8.5', installed: false },
+  { name: 'nodemon', version: '^3.1.3', installed: false },
+  { name: 'typescript', version: '^5.4.5', installed: false },
+  { name: '@types/node', version: '^20.14.2', installed: false },
 ];
 
 // Available ServCraft modules

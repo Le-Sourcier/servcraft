@@ -125,7 +125,8 @@ export function useTerminal({
 
       case "npm":
         if (args[0] === "install" || args[0] === "i") {
-          const pkgName = args[1];
+          // Filter out flags like -g, --save-dev, etc.
+          const pkgName = args.find(arg => !arg.startsWith('-'));
           if (!pkgName) {
             addTerminalOutput(["error: Missing package name"], 'error');
             return;
@@ -150,7 +151,22 @@ export function useTerminal({
               `+ ${pkgName}@${installedPackages[pkgIndex].version}`
             ], 'output');
           } else {
-            addTerminalOutput([`npm ERR! 404 '${pkgName}' is not in the npm registry`], 'error');
+            // Allow installing packages not in the list (simulation only)
+            const defaultVersion = 'latest';
+            const newPackage: PackageDependency = {
+              name: pkgName,
+              version: defaultVersion,
+              installed: true,
+            };
+            setInstalledPackages(prev => [...prev, newPackage]);
+
+            addTerminalOutput([
+              `added 1 package, and audited ${installedPackages.filter(p => p.installed).length + 1} packages`,
+              "",
+              `+ ${pkgName}@${defaultVersion}`,
+              "",
+              "⚠ Note: This is a simulated installation for playground purposes"
+            ], 'output');
           }
 
           setIsInstalling(false);
