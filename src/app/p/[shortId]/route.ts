@@ -31,7 +31,12 @@ export async function GET(
     }
 
     // Proxy to the container's exposed port
-    const targetUrl = `http://localhost:${session.exposedPort}${request.nextUrl.pathname.replace(`/p/${shortId}`, '')}`;
+    // In Docker production, 'localhost' refers to the container itself.
+    // We need to use 172.17.0.1 to access the host's forwarded ports.
+    const isDocker = process.env.NODE_ENV === 'production';
+    const hostIp = isDocker ? '172.17.0.1' : 'localhost';
+
+    const targetUrl = `http://${hostIp}:${session.exposedPort}${request.nextUrl.pathname.replace(`/p/${shortId}`, '')}`;
     const searchParams = request.nextUrl.searchParams.toString();
     const fullUrl = searchParams ? `${targetUrl}?${searchParams}` : targetUrl;
 
@@ -40,7 +45,7 @@ export async function GET(
         method: request.method,
         headers: {
           ...Object.fromEntries(request.headers),
-          'Host': `localhost:${session.exposedPort}`,
+          'Host': `${hostIp}:${session.exposedPort}`,
         },
         // @ts-ignore - body can be passed for non-GET requests
         body: request.method !== 'GET' && request.method !== 'HEAD' ? await request.text() : undefined,

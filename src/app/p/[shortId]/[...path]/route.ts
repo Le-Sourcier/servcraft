@@ -66,8 +66,13 @@ async function handleProxyRequest(
     }
 
     // Build target URL
+    // In Docker production, 'localhost' refers to the container itself.
+    // We need to use 172.17.0.1 to access the host's forwarded ports.
+    const isDocker = process.env.NODE_ENV === 'production';
+    const hostIp = isDocker ? '172.17.0.1' : 'localhost';
+
     const pathString = path ? '/' + path.join('/') : '';
-    const targetUrl = `http://localhost:${session.exposedPort}${pathString}`;
+    const targetUrl = `http://${hostIp}:${session.exposedPort}${pathString}`;
     const searchParams = request.nextUrl.searchParams.toString();
     const fullUrl = searchParams ? `${targetUrl}?${searchParams}` : targetUrl;
 
@@ -78,7 +83,7 @@ async function handleProxyRequest(
         method: request.method,
         headers: {
           ...Object.fromEntries(request.headers),
-          'Host': `localhost:${session.exposedPort}`,
+          'Host': `${hostIp}:${session.exposedPort}`,
         },
         // @ts-ignore
         body: request.method !== 'GET' && request.method !== 'HEAD' ? await request.arrayBuffer() : undefined,
