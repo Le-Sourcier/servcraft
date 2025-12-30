@@ -878,6 +878,17 @@ export default ${mod.name}Controller;
                   }
                 }}
                 theme="vs-dark"
+                beforeMount={(monaco) => {
+                  // Disable TypeScript validation for simulated environment
+                  monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+                    noSemanticValidation: true,
+                    noSyntaxValidation: false, // Keep syntax validation
+                  });
+                  monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+                    noSemanticValidation: true,
+                    noSyntaxValidation: false,
+                  });
+                }}
                 options={{
                   minimap: { enabled: false },
                   fontSize: 14,
