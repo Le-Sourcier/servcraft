@@ -1,9 +1,21 @@
-import type { NextConfig } from "next";
+/** @type {import('next').NextConfig} */
+const path = require("path");
 
-const nextConfig: NextConfig = {
-  /* config options here */
-  reactCompiler: true,
+const nextConfig = {
+  reactStrictMode: true,
+  experimental: {
+    typedRoutes: true,
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "i.pravatar.cc",
+      },
+    ],
+    unoptimized: true,
+  },
   output: "standalone",
 };
 
-export default nextConfig;
+module.exports = nextConfig;
