@@ -397,7 +397,8 @@ export default function PlaygroundPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               if (confirm('Clear all changes and reset session?')) {
                 localStorage.removeItem('playground_session_id');
                 window.location.reload();

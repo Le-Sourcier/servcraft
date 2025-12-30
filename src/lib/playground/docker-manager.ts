@@ -51,7 +51,8 @@ async function checkDockerAvailability(): Promise<boolean> {
 
   try {
     // Check if daemon is responsive
-    execSync('docker ps', { stdio: 'ignore', timeout: 2000 });
+    console.log('[Playground] Checking Docker availability...');
+    execSync('docker ps', { stdio: 'pipe', timeout: 5000 });
     isDockerAvailable = true;
     if (process.env.NODE_ENV !== 'production') {
       globalForPlayground.isDockerAvailable = true;
@@ -62,12 +63,18 @@ async function checkDockerAvailability(): Promise<boolean> {
     cleanupOrphanedContainers();
 
     return true;
-  } catch (error) {
+  } catch (error: any) {
+    const errorMsg = error.stderr?.toString() || error.message || String(error);
+    console.error(`❌ [Playground] Docker check failed: ${errorMsg}`);
+
     if (isDockerAvailable === null) {
-      console.error('❌ [Playground] Docker daemon not responsive. Falling back to simulation.');
+      console.error('⚠️ [Playground] Falling back to simulation mode.');
     }
-    isDockerAvailable = false;
+
+    // In production, we don't want to cache 'false' forever because
+    // the docker socket might become available later or permissions might be updated
     if (process.env.NODE_ENV !== 'production') {
+      isDockerAvailable = false;
       globalForPlayground.isDockerAvailable = false;
     }
     return false;
