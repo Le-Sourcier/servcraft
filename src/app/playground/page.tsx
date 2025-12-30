@@ -281,14 +281,17 @@ export default function PlaygroundPage() {
     addTerminalOutput(['Starting ServCraft service...'], 'system');
 
     try {
-      // Logic for public URL generation
-      const mockUrl = `https://${containerSession.sessionId.slice(8, 20)}.preview.servcraft.io`;
+      // Use the real exposed port from Docker
+      const port = containerSession.exposedPort || 4000;
+      const realUrl = `http://localhost:${port}`;
 
-      const res = await containerSession.executeCode('npm start');
+      const res = await containerSession.executeShellCommand('npm start', true);
       if (res.output) addTerminalOutput([res.output], 'output');
-      if (res.error) addTerminalOutput([res.error], 'error');
+      if (res.error && !res.error.includes('nohup')) addTerminalOutput([res.error], 'error');
 
-      setPreviewUrl(mockUrl);
+      addTerminalOutput(['Server started successfully!'], 'system');
+      addTerminalOutput([`Preview URL: ${realUrl}`], 'output');
+      setPreviewUrl(realUrl);
     } catch (err) {
       addTerminalOutput([`Execution error: ${err}`], 'error');
       setIsRunning(false);

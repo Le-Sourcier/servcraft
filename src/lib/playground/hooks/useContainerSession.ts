@@ -8,6 +8,7 @@ interface UseContainerSessionResult {
   isCreating: boolean;
   isExtended: boolean;
   projectType: 'js' | 'ts' | null;
+  exposedPort: number | null;
   error: string | null;
   createSession: (projectType: 'js' | 'ts') => Promise<void>;
   extendSession: () => Promise<void>;
@@ -15,6 +16,7 @@ interface UseContainerSessionResult {
   syncFiles: (files: FileNode[]) => Promise<void>;
   installPackage: (packageName: string) => Promise<{ success: boolean; output: string }>;
   executeCode: (code: string, filename?: string) => Promise<{ success: boolean; output: string; error?: string }>;
+  executeShellCommand: (command: string, background?: boolean) => Promise<{ success: boolean; output: string; error: string; exitCode: number }>;
   destroySession: () => Promise<void>;
 }
 
@@ -46,6 +48,7 @@ export function useContainerSession(): UseContainerSessionResult {
   const [isCreating, setIsCreating] = useState(false);
   const [isExtended, setIsExtended] = useState(false);
   const [projectType, setProjectType] = useState<'js' | 'ts' | null>(null);
+  const [exposedPort, setExposedPort] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const createdRef = useRef(false);
 
@@ -63,6 +66,7 @@ export function useContainerSession(): UseContainerSessionResult {
             setContainerId(data.containerId);
             setProjectType(data.projectType || 'ts');
             setIsExtended(data.isExtended || false);
+            setExposedPort(data.exposedPort || null);
             setIsReady(true);
           }
         } else if (response.status === 404) {
@@ -97,6 +101,7 @@ export function useContainerSession(): UseContainerSessionResult {
       if (data.success) {
         setContainerId(data.containerId);
         setProjectType(selectedType);
+        setExposedPort(data.exposedPort || null);
         setIsReady(true);
       } else {
         setError(data.error || 'Failed to create container');
@@ -137,25 +142,31 @@ export function useContainerSession(): UseContainerSessionResult {
   // Refresh files from container
   const refreshFiles = useCallback(async (): Promise<FileNode[]> => {
     try {
-      const response = await fetch(`/api/playground/files?sessionId=${sessionId}`);
+      const response = await fetch(`/api/playground/container?sessionId=${sessionId}&action=getFiles`);
       const data = await response.json();
       if (data.success) {
-        // Transform the flat list back to FileNode structure
-        // This is a simplified transformation
+        // Transform the flat list back to FileNode structure with content preserved
         const tree: FileNode[] = [];
         const map: Record<string, FileNode> = {};
 
         data.files.forEach((file: any) => {
           const parts = file.path.split('/');
-          let currentLevel = tree;
 
           parts.forEach((part: string, index: number) => {
             const path = parts.slice(0, index + 1).join('/');
             if (!map[path]) {
+              const isLastPart = index === parts.length - 1;
               const node: FileNode = {
                 name: part,
-                type: (index === parts.length - 1 && file.type === 'file') ? 'file' : 'folder',
+                type: (isLastPart && file.type === 'file') ? 'file' : 'folder',
               };
+
+              // Copy file content and language for files
+              if (node.type === 'file' && isLastPart) {
+                node.content = file.content || '';
+                node.language = file.language || 'plaintext';
+              }
+
               if (node.type === 'folder') node.children = [];
               map[path] = node;
 
@@ -230,6 +241,25 @@ export function useContainerSession(): UseContainerSessionResult {
     };
   }, [sessionId, isReady]);
 
+  // Execute shell command
+  const executeShellCommand = useCallback(async (command: string, background = false) => {
+    if (!isReady) throw new Error('Container not ready');
+
+    const response = await fetch('/api/playground/shell', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, command, background }),
+    });
+
+    const data = await response.json();
+    return {
+      success: data.success,
+      output: data.output || '',
+      error: data.error || '',
+      exitCode: data.exitCode,
+    };
+  }, [sessionId, isReady]);
+
   // Destroy session
   const destroySession = useCallback(async () => {
     try {
@@ -251,6 +281,7 @@ export function useContainerSession(): UseContainerSessionResult {
     isCreating,
     isExtended,
     projectType,
+    exposedPort,
     error,
     createSession,
     extendSession,
@@ -258,6 +289,7 @@ export function useContainerSession(): UseContainerSessionResult {
     syncFiles,
     installPackage,
     executeCode,
+    executeShellCommand,
     destroySession,
   };
 }

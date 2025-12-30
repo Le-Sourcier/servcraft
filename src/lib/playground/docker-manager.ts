@@ -21,6 +21,7 @@ export interface ContainerSession {
   timeout: NodeJS.Timeout;
   isExtended: boolean;
   projectType: 'js' | 'ts';
+  exposedPort?: number;
 }
 
 /**
@@ -55,6 +56,10 @@ async function checkDockerAvailability(): Promise<boolean> {
       globalForPlayground.isDockerAvailable = true;
     }
     console.log('✅ [Playground] Docker daemon detected and accessible');
+
+    // Cleanup orphaned containers from previous server instances
+    cleanupOrphanedContainers();
+
     return true;
   } catch (error) {
     if (isDockerAvailable === null) {
@@ -66,6 +71,81 @@ async function checkDockerAvailability(): Promise<boolean> {
     }
     return false;
   }
+}
+
+/**
+ * Cleanup orphaned containers from previous server instances
+ */
+function cleanupOrphanedContainers() {
+  try {
+    // Get all playground containers with their creation time
+    const result = execSync(
+      'docker ps --filter "name=servcraft-playground-" --format "{{.Names}}\t{{.CreatedAt}}"',
+      { encoding: 'utf-8', timeout: 5000 }
+    );
+
+    const containers = result.trim().split('\n').filter(Boolean);
+    const now = Date.now();
+    const maxAge = CONTAINER_TIMEOUT + EXTENSION_TIMEOUT; // 40 minutes max
+
+    let cleanedCount = 0;
+
+    containers.forEach(line => {
+      const [containerName, createdAt] = line.split('\t');
+      if (!containerName) return;
+
+      try {
+        // Parse creation time
+        const createdDate = new Date(createdAt).getTime();
+        const age = now - createdDate;
+
+        // If container is older than max allowed age, remove it
+        if (age > maxAge) {
+          console.log(`🧹 [Playground] Removing expired container ${containerName} (age: ${Math.floor(age / 60000)}min)`);
+          execSync(`docker rm -f ${containerName}`, { stdio: 'ignore' });
+
+          const volumeName = containerName.replace('servcraft-playground-', 'servcraft-vol-');
+          execSync(`docker volume rm ${volumeName}`, { stdio: 'ignore' });
+
+          cleanedCount++;
+        }
+      } catch (err) {
+        // Ignore errors
+      }
+    });
+
+    if (cleanedCount > 0) {
+      console.log(`✅ [Playground] Cleaned up ${cleanedCount} expired containers`);
+    }
+  } catch (error) {
+    // Ignore errors if no containers found
+  }
+}
+
+/**
+ * Start periodic cleanup worker
+ * Runs every 5 minutes to clean up expired containers
+ */
+function startCleanupWorker() {
+  const CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+  const worker = setInterval(() => {
+    console.log('[Playground] Running periodic cleanup check...');
+    cleanupOrphanedContainers();
+  }, CLEANUP_INTERVAL);
+
+  // Don't prevent Node.js from exiting
+  if (worker.unref) worker.unref();
+
+  console.log('🔄 [Playground] Cleanup worker started (runs every 5 minutes)');
+}
+
+// Initialize cleanup worker on first import
+if (process.env.NODE_ENV !== 'production' && !globalForPlayground.cleanupWorkerStarted) {
+  startCleanupWorker();
+  (globalForPlayground as any).cleanupWorkerStarted = true;
+} else if (process.env.NODE_ENV === 'production') {
+  startCleanupWorker();
 }
 
 /**
@@ -82,10 +162,13 @@ export async function createContainer(sessionId: string, projectType: 'js' | 'ts
     const containerName = `servcraft-playground-${sessionId}`;
     const volumeName = `servcraft-vol-${sessionId}`;
 
+    // Generate random port for this container (between 4000-5000)
+    const exposedPort = 4000 + Math.floor(Math.random() * 1000);
+
     /**
      * CRITICAL: Setup session BEFORE spawning docker to avoid race conditions.
      */
-    setupSession(sessionId, 'starting...', projectType);
+    setupSession(sessionId, 'starting...', projectType, exposedPort);
 
     // Clean up any legacy resources
     try {
@@ -98,7 +181,8 @@ export async function createContainer(sessionId: string, projectType: 'js' | 'ts
       '--rm',
       '-m', '512m',
       '--cpus', '0.5',
-      '--network', 'bridge', // Changed from none to allow npm install
+      '--network', 'bridge',
+      '-p', `${exposedPort}:3000`, // Expose container port 3000 to host
       '-v', `${volumeName}:/workspace`,
       CONTAINER_IMAGE,
       'sleep', 'infinity'
@@ -196,7 +280,7 @@ export async function extendSession(sessionId: string): Promise<boolean> {
 /**
  * Helper to setup session metadata
  */
-function setupSession(sessionId: string, containerId: string, projectType: 'js' | 'ts' = 'ts') {
+function setupSession(sessionId: string, containerId: string, projectType: 'js' | 'ts' = 'ts', exposedPort?: number) {
   const existing = activeSessions.get(sessionId);
   if (existing) {
     clearTimeout(existing.timeout);
@@ -214,6 +298,7 @@ function setupSession(sessionId: string, containerId: string, projectType: 'js' 
     timeout,
     isExtended: existing?.isExtended || false,
     projectType,
+    exposedPort: exposedPort || existing?.exposedPort,
   });
 }
 

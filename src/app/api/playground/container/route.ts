@@ -32,6 +32,8 @@ export async function POST(request: NextRequest) {
 
     const isSimulation = containerId.startsWith('sim-');
 
+    const session = getContainerStatus(sessionId);
+
     return NextResponse.json({
       success: true,
       containerId,
@@ -41,6 +43,7 @@ export async function POST(request: NextRequest) {
       isSimulation,
       projectType,
       timeout: 30 * 60 * 1000,
+      exposedPort: session?.exposedPort,
     });
   } catch (error) {
     console.error('Container creation error:', error);
@@ -109,17 +112,29 @@ export async function DELETE(request: NextRequest) {
 
 /**
  * GET /api/playground/container
- * Get container status
+ * Get container status or files
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get('sessionId');
+    const action = searchParams.get('action');
 
     if (!sessionId) {
       return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
     }
 
+    // Handle file listing
+    if (action === 'getFiles') {
+      const { readFilesFromContainer } = await import('@/lib/playground/docker-manager');
+      const files = await readFilesFromContainer(sessionId);
+      return NextResponse.json({
+        success: true,
+        files,
+      });
+    }
+
+    // Handle status check
     const session = getContainerStatus(sessionId);
 
     if (!session) {
@@ -131,6 +146,9 @@ export async function GET(request: NextRequest) {
       containerId: session.containerId,
       createdAt: session.createdAt,
       lastAccessed: session.lastAccessed,
+      exposedPort: session.exposedPort,
+      projectType: session.projectType,
+      isExtended: session.isExtended,
     });
   } catch (error) {
     console.error('Container status error:', error);
