@@ -14,6 +14,15 @@ jobs:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "❌ Error: SERVER_SSH_KEY is empty. Please check GitHub Secrets for this repository."
+            exit 1
+          fi
+          if [ -z "$SERVER_HOST" ]; then
+            echo "❌ Error: SERVER_HOST is empty. Please check GitHub Secrets for this repository."
+            exit 1
+          fi
+
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
