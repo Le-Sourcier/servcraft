@@ -255,6 +255,7 @@ export default function PlaygroundPage() {
   const [terminalIdCounter, setTerminalIdCounter] = useState(1);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLPreElement>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
   const lineNumbersRef = useRef<HTMLDivElement>(null);
 
   // Persist playground state
@@ -394,15 +395,6 @@ export default function PlaygroundPage() {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
   }, [terminalCommands]);
-
-  // Sync scroll between textarea, highlight, and line numbers
-  const handleEditorScroll = () => {
-    if (editorRef.current && highlightRef.current && lineNumbersRef.current) {
-      highlightRef.current.scrollTop = editorRef.current.scrollTop;
-      highlightRef.current.scrollLeft = editorRef.current.scrollLeft;
-      lineNumbersRef.current.scrollTop = editorRef.current.scrollTop;
-    }
-  };
 
   // Add terminal output
   const addTerminalOutput = (output: string[], type: TerminalCommand['type'] = 'output', command = "") => {
@@ -999,11 +991,10 @@ export default ${mod.name}Controller;
                 </div>
 
                 {/* Code editor with syntax highlighting */}
-                <div className="flex-1 relative">
+                <div className="flex-1 relative overflow-auto" ref={editorContainerRef}>
                   {/* Syntax highlighted background */}
                   <pre
-                    ref={highlightRef}
-                    className="absolute inset-0 p-4 font-mono text-sm leading-6 whitespace-pre overflow-auto pointer-events-none"
+                    className="absolute inset-0 p-4 font-mono text-sm leading-6 whitespace-pre pointer-events-none"
                     aria-hidden="true"
                     dangerouslySetInnerHTML={{ __html: highlightCode(selectedFile.content || "", selectedFile.language || "typescript") }}
                   />
@@ -1020,7 +1011,12 @@ export default ${mod.name}Controller;
                         setSelectedFile({ ...selectedFile, content: newContent });
                       }
                     }}
-                    onScroll={handleEditorScroll}
+                    onScroll={(e) => {
+                      if (lineNumbersRef.current && editorContainerRef.current) {
+                        lineNumbersRef.current.scrollTop = e.currentTarget.scrollTop;
+                        editorContainerRef.current.scrollTop = e.currentTarget.scrollTop;
+                      }
+                    }}
                     onKeyDown={(e) => {
                       // Handle Tab key
                       if (e.key === 'Tab') {
@@ -1065,11 +1061,12 @@ export default ${mod.name}Controller;
                         }, 0);
                       }
                     }}
-                    className="absolute inset-0 w-full h-full p-4 font-mono text-sm resize-none focus:outline-none leading-6 whitespace-pre overflow-auto bg-transparent caret-white selection:bg-primary/30"
+                    className="relative w-full min-h-full p-4 font-mono text-sm resize-none focus:outline-none leading-6 whitespace-pre bg-transparent caret-white selection:bg-primary/30 border-0 overflow-visible"
                     style={{
                       color: "transparent",
                       WebkitTextFillColor: "transparent",
-                      tabSize: 2
+                      tabSize: 2,
+                      outline: 'none'
                     }}
                     spellCheck={false}
                     autoCapitalize="off"
