@@ -1,0 +1,27 @@
+services:
+  servcraft:
+    build:
+      context: .
+    image: servcraft:latest
+    container_name: servcraft
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+    ports:
+      - "3200:3000"
+      # Port range for playground containers
+      - "4000-5000:4000-5000"
+    volumes:
+      # Mount Docker socket to allow playground to create containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mount for playground volumes persistence
+      - playground-volumes:/var/lib/docker/volumes
+    restart: unless-stopped
+    # Required for Docker socket access
+    privileged: false
+    user: root  # Required to access Docker socket
+
+volumes:
+  playground-volumes:

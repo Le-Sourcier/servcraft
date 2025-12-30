@@ -1,0 +1,72 @@
+name: 🚀 Deploy Servcraft (Docker)
+on:
+  push:
+    branches: [docs]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync workspace to server
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts
+          rsync -az --delete \
+            --exclude ".git/" \
+            --exclude "node_modules/" \
+            --exclude ".next/" \
+            --exclude ".env" \
+            --exclude ".env.*" \
+            --exclude ".user.ini" \
+            ./ "$SERVER_USER@$SERVER_HOST:/www/wwwroot/servcraft.nexuscorporat.com"
+          rm -f ~/.ssh/id_rsa
+      - name: Deploy with Docker Compose
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /www/wwwroot/servcraft.nexuscorporat.com
+
+            # Create .env file
+            cat <<EOF > .env
+            NEXT_PUBLIC_API_BASE_URL=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+            ADMIN_JWT_SECRET=${{ secrets.ADMIN_JWT_SECRET }}
+            NODE_ENV=production
+            PORT=3000
+            EOF
+            chmod 600 .env
+
+            # Deploy with Docker Compose
+            if command -v docker-compose >/dev/null 2>&1; then
+              docker-compose pull || true
+              docker-compose down
+              docker-compose up -d --build --remove-orphans
+            else
+              docker compose pull || true
+              docker compose down
+              docker compose up -d --build --remove-orphans
+            fi
+
+            # Setup playground cleanup cron job
+            chmod +x scripts/cleanup-playground-containers.sh
+            CRON_JOB="*/10 * * * * /www/wwwroot/servcraft.nexuscorporat.com/scripts/cleanup-playground-containers.sh >> /var/log/playground-cleanup.log 2>&1"
+            (crontab -l 2>/dev/null | grep -v "cleanup-playground-containers.sh"; echo "$CRON_JOB") | crontab -
+
+            # Create log file if it doesn't exist
+            sudo touch /var/log/playground-cleanup.log
+            sudo chmod 666 /var/log/playground-cleanup.log
+
+            # Clean up old images
+            docker image prune -f
+
+            echo "✅ Deployment completed successfully!"
+            echo "✅ Playground cleanup cron job configured (runs every 10 minutes)"
