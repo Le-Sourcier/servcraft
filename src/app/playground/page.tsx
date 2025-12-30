@@ -991,10 +991,20 @@ export default ${mod.name}Controller;
                 </div>
 
                 {/* Code editor with syntax highlighting */}
-                <div className="flex-1 relative overflow-auto" ref={editorContainerRef}>
+                <div
+                  className="flex-1 relative overflow-auto"
+                  ref={editorContainerRef}
+                  onScroll={(e) => {
+                    // Sync line numbers when container scrolls
+                    if (lineNumbersRef.current) {
+                      lineNumbersRef.current.scrollTop = e.currentTarget.scrollTop;
+                    }
+                  }}
+                >
                   {/* Syntax highlighted background */}
                   <pre
-                    className="absolute inset-0 p-4 font-mono text-sm leading-6 whitespace-pre pointer-events-none"
+                    ref={highlightRef}
+                    className="absolute top-0 left-0 p-4 font-mono text-sm leading-6 whitespace-pre pointer-events-none"
                     aria-hidden="true"
                     dangerouslySetInnerHTML={{ __html: highlightCode(selectedFile.content || "", selectedFile.language || "typescript") }}
                   />
@@ -1009,12 +1019,6 @@ export default ${mod.name}Controller;
                       updateFileContent(path, newContent);
                       if (selectedFile && activeTabId) {
                         setSelectedFile({ ...selectedFile, content: newContent });
-                      }
-                    }}
-                    onScroll={(e) => {
-                      if (lineNumbersRef.current && editorContainerRef.current) {
-                        lineNumbersRef.current.scrollTop = e.currentTarget.scrollTop;
-                        editorContainerRef.current.scrollTop = e.currentTarget.scrollTop;
                       }
                     }}
                     onKeyDown={(e) => {
@@ -1061,12 +1065,13 @@ export default ${mod.name}Controller;
                         }, 0);
                       }
                     }}
-                    className="relative w-full min-h-full p-4 font-mono text-sm resize-none focus:outline-none leading-6 whitespace-pre bg-transparent caret-white selection:bg-primary/30 border-0 overflow-visible"
+                    className="block w-full p-4 font-mono text-sm resize-none focus:outline-none leading-6 whitespace-pre bg-transparent caret-white selection:bg-primary/30 border-0"
                     style={{
                       color: "transparent",
                       WebkitTextFillColor: "transparent",
                       tabSize: 2,
-                      outline: 'none'
+                      outline: 'none',
+                      minHeight: '100%'
                     }}
                     spellCheck={false}
                     autoCapitalize="off"
