@@ -1,6 +1,25 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { TerminalCommand, PackageDependency, InstalledModule, FileNode } from '../project';
 
+/**
+ * Get description for a module
+ */
+function getModuleDescription(moduleName: string): string {
+  const descriptions: Record<string, string> = {
+    auth: 'JWT authentication, OAuth, MFA support',
+    users: 'Complete user CRUD with roles & permissions',
+    email: 'SMTP email sending with templates',
+    cache: 'Redis caching with TTL support',
+    queue: 'BullMQ background job processing',
+    websocket: 'Real-time Socket.io communication',
+    oauth: 'Social login (Google, GitHub, etc.)',
+    mfa: 'Two-factor authentication (TOTP)',
+    search: 'Elasticsearch integration',
+    logger: 'Structured logging with Pino',
+  };
+  return descriptions[moduleName] || 'ServCraft module';
+}
+
 interface UseTerminalProps {
   installedPackages: PackageDependency[];
   setInstalledPackages: React.Dispatch<React.SetStateAction<PackageDependency[]>>;
@@ -68,15 +87,26 @@ export function useTerminal({
       case "help":
         addTerminalOutput([
           "Available commands:",
-          "  npm install [package]  - Install a package",
-          "  npm uninstall <package> - Remove a package",
-          "  servcraft add <module> - Add a ServCraft module",
+          "",
+          "Package Management:",
+          "  npm install [package]     - Install a package",
+          "  npm uninstall <package>   - Remove a package",
+          "",
+          "Module Management:",
+          "  servcraft add --list      - List available modules",
+          "  servcraft add <module>    - Add a ServCraft module",
           "  servcraft remove <module> - Remove a module",
-          "  servcraft dev          - Start development server",
-          "  servcraft build        - Build the project",
-          "  servcraft db push      - Push database schema",
-          "  clear                  - Clear terminal",
-          "  help                   - Show this message",
+          "",
+          "Development:",
+          "  servcraft dev             - Start development server",
+          "  servcraft build           - Build the project",
+          "",
+          "Database:",
+          "  servcraft db push         - Push database schema",
+          "",
+          "Other:",
+          "  clear                     - Clear terminal",
+          "  help                      - Show this message",
         ], 'system');
         break;
 
@@ -145,8 +175,25 @@ export function useTerminal({
       case "sc":
         if (args[0] === "add") {
           const moduleName = args[1];
+
+          // Handle --list or -l flag
+          if (moduleName === '--list' || moduleName === '-l') {
+            addTerminalOutput([
+              "Available ServCraft modules:",
+              "",
+              ...installedModules.map(m => {
+                const status = m.installed ? '✓ installed' : '  available';
+                const desc = getModuleDescription(m.name);
+                return `  ${status}  ${m.name.padEnd(12)} - ${desc}`;
+              }),
+              "",
+              "Install a module with: servcraft add <module-name>",
+            ], 'output');
+            return;
+          }
+
           if (!moduleName) {
-            addTerminalOutput(["error: Missing module name"], 'error');
+            addTerminalOutput(["error: Missing module name", "Use 'servcraft add --list' to see available modules"], 'error');
             return;
           }
 
@@ -214,7 +261,7 @@ export default ${moduleName}Controller;
             ], 'output');
           } else {
             addTerminalOutput([`error: Unknown module '${moduleName}'`], 'error');
-            addTerminalOutput(["Available modules: auth, users, email, cache, queue, websocket, oauth, mfa, search, logger"], 'output');
+            addTerminalOutput(["Use 'servcraft add --list' to see available modules"], 'output');
           }
 
           setIsInstalling(false);
