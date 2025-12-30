@@ -26,6 +26,12 @@ interface UseTerminalProps {
   installedModules: InstalledModule[];
   setInstalledModules: React.Dispatch<React.SetStateAction<InstalledModule[]>>;
   setFiles: React.Dispatch<React.SetStateAction<FileNode[]>>;
+  containerSession?: {
+    isReady: boolean;
+    installPackage: (packageName: string) => Promise<{ success: boolean; output: string }>;
+    executeCode: (code: string, filename?: string) => Promise<{ success: boolean; output: string; error?: string }>;
+    syncFiles: (files: FileNode[]) => Promise<void>;
+  };
 }
 
 export function useTerminal({
@@ -34,6 +40,7 @@ export function useTerminal({
   installedModules,
   setInstalledModules,
   setFiles,
+  containerSession,
 }: UseTerminalProps) {
   const [terminalCommands, setTerminalCommands] = useState<TerminalCommand[]>([
     {
@@ -134,7 +141,18 @@ export function useTerminal({
 
           setIsInstalling(true);
           addTerminalOutput([`Installing ${pkgName}...`], 'output');
-          await new Promise(resolve => setTimeout(resolve, 1500));
+
+          // Use real container if available
+          if (containerSession?.isReady) {
+            try {
+              const res = await containerSession.installPackage(pkgName);
+              addTerminalOutput([res.output], res.success ? 'output' : 'error');
+            } catch (err) {
+              addTerminalOutput([`Failed to contact execution server: ${err}`], 'error');
+            }
+          } else {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+          }
 
           const pkgIndex = installedPackages.findIndex(p =>
             p.name === pkgName || p.name.endsWith("/" + pkgName)
