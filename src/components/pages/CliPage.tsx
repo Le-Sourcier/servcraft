@@ -216,7 +216,7 @@ export function CliPage() {
   return (
     <div className="min-h-screen">
       {/* Hero */}
-      <section className="py-20 lg:py-32 gradient-bg">
+      <section className="py-16 lg:py-24 gradient-bg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
