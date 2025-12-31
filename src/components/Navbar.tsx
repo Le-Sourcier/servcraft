@@ -157,7 +157,7 @@ export function Navbar() {
       animate={{
         y: isVisible ? 0 : -100,
         backgroundColor: isScrolled
-          ? "rgba(10, 10, 15, 0.85)"
+          ? "rgba(10, 10, 15, 0.7)"
           : "rgba(10, 10, 15, 0)",
       }}
       transition={{
@@ -165,9 +165,8 @@ export function Navbar() {
         backgroundColor: { duration: 0.3 },
       }}
       className={cn(
-        "fixed top-0 left-0 right-0 z-50",
-        // Add blur and border when scrolled
-        isScrolled && "backdrop-blur-xl border-b border-white/5"
+        "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
+        isScrolled ? "backdrop-blur-xl border-b border-white/10" : "border-b border-transparent"
       )}
     >
       {/* Gradient glow effect at bottom when scrolled */}
@@ -234,72 +233,91 @@ export function Navbar() {
                 </button>
               </motion.div>
 
-              {/* Dropdown Menu */}
+              {/* Mega Menu Dropdown */}
               <AnimatePresence>
                 {isDocDropdownOpen && (
                   <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    initial={{ opacity: 0, y: 10, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute top-full left-0 mt-2 w-80 bg-card/95 backdrop-blur-xl border border-border rounded-xl shadow-2xl shadow-primary/10 overflow-hidden"
+                    exit={{ opacity: 0, y: 10, scale: 0.98 }}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                    className="absolute top-full left-1/2 -translate-x-1/2 mt-4 w-[800px] max-w-[90vw] bg-[#0a0a0f]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] shadow-primary/5 overflow-hidden z-50"
                     onMouseLeave={() => setIsDocDropdownOpen(false)}
                   >
-                    {/* Search hint */}
-                    <div className="px-4 py-3 bg-secondary/30 border-b border-border">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Quick search</span>
-                        <div className="flex items-center gap-1">
-                          <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-secondary rounded border border-border">
-                            ⌘K
-                          </kbd>
+                    <div className="flex">
+                      {/* Left Sidebar Info */}
+                      <div className="w-1/3 bg-white/5 p-8 border-r border-white/5 flex flex-col justify-between">
+                        <div>
+                          <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center mb-4">
+                            <BookOpen className="w-6 h-6 text-primary" />
+                          </div>
+                          <h3 className="text-xl font-bold text-white mb-2">Documentation</h3>
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            Everything you need to build scalable and maintainable Node.js backends with ServCraft.
+                          </p>
+                        </div>
+                        <Link
+                          href="/docs"
+                          onClick={() => setIsDocDropdownOpen(false)}
+                          className="flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/80 transition-colors group/all"
+                        >
+                          Explore all guides
+                          <ChevronRight className="w-4 h-4 group-hover/all:translate-x-1 transition-transform" />
+                        </Link>
+                      </div>
+
+                      {/* Right Grid Content */}
+                      <div className="flex-1 p-6">
+                        <div className="grid grid-cols-2 gap-2">
+                          {docLinks.map((link, index) => (
+                            <motion.div
+                              key={link.href}
+                              initial={{ opacity: 0, y: 5 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: index * 0.02 }}
+                            >
+                              <Link
+                                href={link.href as Route}
+                                onClick={() => setIsDocDropdownOpen(false)}
+                                className="flex items-start gap-4 p-4 rounded-xl hover:bg-white/5 transition-all duration-300 group/item border border-transparent hover:border-white/5"
+                              >
+                                <div className="w-10 h-10 rounded-lg bg-secondary/50 flex items-center justify-center flex-shrink-0 group-hover/item:bg-primary/10 transition-colors shadow-inner">
+                                  <link.icon className="w-5 h-5 text-muted-foreground group-hover/item:text-primary transition-colors" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                                    <span className="text-sm font-semibold text-foreground group-hover/item:text-primary transition-colors truncate">
+                                      {link.title}
+                                    </span>
+                                    <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/30 opacity-0 group-hover/item:opacity-100 group-hover/item:text-primary/50 transition-all" />
+                                  </div>
+                                  <span className="text-xs text-muted-foreground/80 line-clamp-1">
+                                    {link.description}
+                                  </span>
+                                </div>
+                              </Link>
+                            </motion.div>
+                          ))}
                         </div>
                       </div>
                     </div>
 
-                    {/* Links Grid */}
-                    <div className="p-2 grid grid-cols-2 gap-1">
-                      {docLinks.map((link, index) => (
-                        <motion.div
-                          key={link.href}
-                          initial={{ opacity: 0, y: 5 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.03 }}
-                        >
-                          <Link
-                            href={link.href as Route}
-                            onClick={() => setIsDocDropdownOpen(false)}
-                            className="flex items-start gap-3 p-3 rounded-lg hover:bg-secondary/50 transition-colors group"
-                          >
-                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">
-                              <link.icon className="w-4 h-4 text-primary" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1">
-                                <span className="text-sm font-medium group-hover:text-primary transition-colors truncate">
-                                  {link.title}
-                                </span>
-                                <ArrowUpRight className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                              </div>
-                              <span className="text-xs text-muted-foreground truncate block">
-                                {link.description}
-                              </span>
-                            </div>
-                          </Link>
-                        </motion.div>
-                      ))}
-                    </div>
-
-                    {/* Footer */}
-                    <div className="px-4 py-3 bg-secondary/20 border-t border-border">
-                      <Link
-                        href="/docs"
-                        onClick={() => setIsDocDropdownOpen(false)}
-                        className="flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        View all documentation
-                        <ArrowUpRight className="w-4 h-4" />
-                      </Link>
+                    {/* Bottom Status/Search area */}
+                    <div className="px-8 py-4 bg-white/[0.02] border-t border-white/5 flex items-center justify-between">
+                      <div className="flex gap-4">
+                        <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider font-bold text-muted-foreground/50">
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                          Stable v0.4.9
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider font-bold text-muted-foreground/50">
+                          <Github className="w-3 h-3" />
+                          Open Source
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground/40">
+                        <kbd className="px-1.5 py-0.5 font-mono bg-white/5 rounded border border-white/10 uppercase">Esc</kbd>
+                        <span>to close</span>
+                      </div>
                     </div>
                   </motion.div>
                 )}
