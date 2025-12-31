@@ -9,4 +9,8 @@ services:
       - NEXT_TELEMETRY_DISABLED=1
     ports:
       - "3200:3000"
+      - "4000-5000:4000-5000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    user: root
     restart: unless-stopped
