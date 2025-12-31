@@ -17,6 +17,10 @@ export const metadata: Metadata = {
   title: "ServCraft - Modular Node.js Backend Framework",
   description: "A modular, production-ready Node.js backend framework built with TypeScript, Fastify, and Prisma. Generate production-ready backends in minutes.",
   keywords: ["Node.js", "Backend", "Framework", "Fastify", "TypeScript", "Prisma", "CLI", "ServCraft"],
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

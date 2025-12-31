@@ -2,6 +2,7 @@
 
 import type { Route } from 'next';
 import Link from "next/link";
+import Image from "next/image";
 import { Github, Package, Heart } from "lucide-react";
 
 const footerLinks = {
@@ -40,20 +41,14 @@ export function Footer() {
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                <svg
-                  className="w-5 h-5 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
-                </svg>
+              <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center">
+                <Image
+                  src="/logo.png"
+                  alt="ServCraft Logo"
+                  width={40}
+                  height={40}
+                  className="w-full h-full object-cover"
+                />
               </div>
               <span className="text-xl font-bold gradient-text">ServCraft</span>
             </Link>
