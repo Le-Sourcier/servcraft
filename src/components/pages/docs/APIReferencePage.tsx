@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Code2,
   ChevronRight,
+  ArrowRight,
   Layers,
   Box,
   Zap,
