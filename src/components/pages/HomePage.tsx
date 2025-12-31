@@ -115,7 +115,7 @@ export function HomePage() {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="relative overflow-hidden gradient-bg py-20 lg:py-32">
+      <section className="relative overflow-hidden gradient-bg py-16 lg:py-24">
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-1/2 -left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl" />
           <div className="absolute -bottom-1/2 -right-1/4 w-96 h-96 bg-accent/20 rounded-full blur-3xl" />
