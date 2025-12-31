@@ -153,21 +153,20 @@ export function Navbar() {
 
   return (
     <motion.header
-      initial={{ y: 0 }}
+      initial={{ y: 0, backgroundColor: "rgba(10, 10, 15, 0)" }}
       animate={{
         y: isVisible ? 0 : -100,
         backgroundColor: isScrolled
-          ? "rgba(10, 10, 15, 0.7)"
+          ? "rgba(10, 10, 15, 0.8)"
           : "rgba(10, 10, 15, 0)",
+        backdropFilter: isScrolled ? "blur(16px)" : "blur(0px)",
+        borderBottomColor: isScrolled ? "rgba(255, 255, 255, 0.1)" : "rgba(255, 255, 255, 0)",
       }}
       transition={{
-        y: { duration: 0.35, ease: "easeInOut" },
-        backgroundColor: { duration: 0.3 },
+        duration: 0.4,
+        ease: [0.23, 1, 0.32, 1], // Custom cubic-bezier for professional feel
       }}
-      className={cn(
-        "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
-        isScrolled ? "backdrop-blur-xl border-b border-white/10" : "border-b border-transparent"
-      )}
+      className="fixed top-0 left-0 right-0 z-50 border-b"
     >
       {/* Gradient glow effect at bottom when scrolled */}
       <AnimatePresence>
