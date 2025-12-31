@@ -223,14 +223,6 @@ export function CliPage() {
             animate={{ opacity: 1, y: 0 }}
             className="text-center max-w-3xl mx-auto"
           >
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-8 transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Home
-            </Link>
-
             <div className="flex items-center justify-center gap-4 mb-6">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center glow">
                 <Terminal className="w-8 h-8 text-white" />
