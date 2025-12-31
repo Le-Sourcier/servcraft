@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /playground/
+
+Sitemap: https://servcraft.nexuscorporat.com/sitemap.xml
